@@ -13,6 +13,9 @@ export interface Meteor {
   tapCount: number;
   vertices: number[];
   trail: { x: number; y: number; age: number }[];
+  isBoss?: boolean;
+  bossHp?: number;
+  bossMaxHp?: number;
 }
 
 export interface Particle {
@@ -24,7 +27,7 @@ export interface Particle {
   maxLife: number;
   size: number;
   hue: number;
-  type: 'spark' | 'debris' | 'chaos';
+  type: 'spark' | 'debris' | 'chaos' | 'shower';
 }
 
 export interface Star {
@@ -57,6 +60,16 @@ export interface LeaderboardEntry {
   date: string;
 }
 
+export type SpecialEventType = 'meteor_shower' | 'boss_meteor';
+
+export interface SpecialEvent {
+  type: SpecialEventType;
+  timer: number;
+  duration: number;
+  active: boolean;
+  data?: any;
+}
+
 export interface GameState {
   score: number;
   level: number;
@@ -69,8 +82,10 @@ export interface GameState {
   comboTimer: number;
   screenShake: number;
   maxCombo: number;
-  // Power-up active timers (ms remaining)
   slowmoTimer: number;
   scoreMultiTimer: number;
   scoreMultiplier: number;
+  specialEvent: SpecialEvent | null;
+  lastEventLevel: number;
+  bossDefeated: number;
 }
