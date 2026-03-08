@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Meteor, Particle, Star, GameState, PowerUp, PowerUpType } from './types';
-import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, resumeAudio } from './sounds';
+import { Meteor, Particle, Star, GameState, PowerUp, PowerUpType, SpecialEvent } from './types';
+import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM } from './sounds';
 import { addLeaderboardEntry, getLeaderboard, getStats } from './leaderboard';
 
 const MAX_METEORS = 60;
@@ -8,6 +8,10 @@ const CHAOS_THRESHOLD = 0.7;
 const COMBO_TIMEOUT = 2000;
 const POWERUP_DROP_CHANCE = 0.15;
 const POWERUP_DURATION = 5000;
+const EVENT_INTERVAL_LEVELS = 3; // special event every 3 levels
+const SHOWER_DURATION = 6000;
+const BOSS_HP_BASE = 5;
+const TUTORIAL_KEY = 'meteorSplit_tutorialSeen';
 
 let idCounter = 0;
 const genId = () => `m${++idCounter}`;
@@ -41,6 +45,41 @@ const createMeteor = (x: number, y: number, gen: number, canvasW: number, canvas
     vertices: createVertices(8 + Math.floor(Math.random() * 5)),
     trail: [],
   };
+};
+
+const createBossMeteor = (w: number, h: number, level: number): Meteor => {
+  const side = Math.floor(Math.random() * 4);
+  let x = 0, y = 0;
+  if (side === 0) { x = Math.random() * w; y = -80; }
+  else if (side === 1) { x = w + 80; y = Math.random() * h; }
+  else if (side === 2) { x = Math.random() * w; y = h + 80; }
+  else { x = -80; y = Math.random() * h; }
+
+  const hp = BOSS_HP_BASE + Math.floor(level / 2);
+  const boss: Meteor = {
+    id: genId(),
+    x, y,
+    vx: 0, vy: 0,
+    radius: 70 + level * 3,
+    rotation: 0,
+    rotationSpeed: 0.005,
+    generation: 0,
+    opacity: 1,
+    hue: 300,
+    tapCount: 0,
+    vertices: createVertices(12),
+    trail: [],
+    isBoss: true,
+    bossHp: hp,
+    bossMaxHp: hp,
+  };
+  // Move toward center
+  const cx = w / 2 + (Math.random() - 0.5) * w * 0.3;
+  const cy = h / 2 + (Math.random() - 0.5) * h * 0.3;
+  const a = Math.atan2(cy - y, cx - x);
+  boss.vx = Math.cos(a) * 0.3;
+  boss.vy = Math.sin(a) * 0.3;
+  return boss;
 };
 
 const spawnMeteorsAtEdge = (count: number, gen: number, w: number, h: number): Meteor[] => {
@@ -83,7 +122,20 @@ const maybeSpawnPowerUp = (x: number, y: number, powerups: PowerUp[]) => {
   }
 };
 
-type Screen = 'title' | 'playing' | 'gameover' | 'leaderboard';
+type Screen = 'title' | 'playing' | 'gameover' | 'leaderboard' | 'tutorial';
+
+interface TutorialStep {
+  title: string;
+  desc: string;
+  icon: string;
+}
+
+const TUTORIAL_STEPS: TutorialStep[] = [
+  { title: 'TAP TO SPLIT', desc: 'Tap meteors to break them into smaller pieces. Smaller = more points!', icon: '☄️' },
+  { title: 'WATCH THE CHAOS', desc: 'Over-tapping the same meteor fills your Chaos Meter. Hit 100% and it\'s game over!', icon: '⚠️' },
+  { title: 'COLLECT POWER-UPS', desc: 'Destroyed meteors drop power-ups: Slow-Mo ⏱, Chaos Reduce 💚, Score Boost ⭐', icon: '✨' },
+  { title: 'SURVIVE EVENTS', desc: 'Meteor Showers rain down fast! Boss Meteors need multiple hits to defeat.', icon: '💥' },
+];
 
 export default function MeteorSplitGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,20 +145,28 @@ export default function MeteorSplitGame() {
     highScore: parseInt(localStorage.getItem('meteorSplitHigh') || '0'),
     combo: 0, comboTimer: 0, screenShake: 0, maxCombo: 0,
     slowmoTimer: 0, scoreMultiTimer: 0, scoreMultiplier: 1,
+    specialEvent: null, lastEventLevel: 0, bossDefeated: 0,
   });
   const meteorsRef = useRef<Meteor[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const starsRef = useRef<Star[]>([]);
   const powerupsRef = useRef<PowerUp[]>([]);
   const spawnTimerRef = useRef(0);
+  const showerTimerRef = useRef(0);
   const animRef = useRef(0);
   const [screen, setScreen] = useState<Screen>('title');
+  const [tutorialStep, setTutorialStep] = useState(0);
   const [uiState, setUiState] = useState({
     score: 0, level: 1, chaos: 0, highScore: gameRef.current.highScore, combo: 0,
     slowmo: false, scoreMult: false, scoreMultiplier: 1,
+    eventText: '' as string,
+    bossHpPct: 0,
+    showBossHp: false,
   });
   const [leaderboard, setLeaderboard] = useState(getLeaderboard());
   const [stats, setStats] = useState(getStats());
+
+  const hasSeenTutorial = useRef(localStorage.getItem(TUTORIAL_KEY) === '1');
 
   const initStars = useCallback((w: number, h: number) => {
     const stars: Star[] = [];
@@ -122,10 +182,10 @@ export default function MeteorSplitGame() {
     starsRef.current = stars;
   }, []);
 
-  const addParticles = (x: number, y: number, count: number, hue: number, type: 'spark' | 'debris' | 'chaos') => {
+  const addParticles = (x: number, y: number, count: number, hue: number, type: 'spark' | 'debris' | 'chaos' | 'shower') => {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
-      const spd = type === 'chaos' ? 2 + Math.random() * 5 : 1 + Math.random() * 3;
+      const spd = type === 'chaos' ? 2 + Math.random() * 5 : type === 'shower' ? 1 + Math.random() * 2 : 1 + Math.random() * 3;
       particlesRef.current.push({
         x, y, vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
         life: 1, maxLife: 0.5 + Math.random() * 0.8,
@@ -135,10 +195,55 @@ export default function MeteorSplitGame() {
     }
   };
 
+  const triggerSpecialEvent = useCallback((w: number, h: number) => {
+    const game = gameRef.current;
+    const eventType = Math.random() < 0.5 ? 'meteor_shower' : 'boss_meteor';
+
+    if (eventType === 'meteor_shower') {
+      playShowerWarning();
+      game.specialEvent = { type: 'meteor_shower', timer: SHOWER_DURATION, duration: SHOWER_DURATION, active: true };
+      showerTimerRef.current = 0;
+    } else {
+      const boss = createBossMeteor(w, h, game.level);
+      meteorsRef.current.push(boss);
+      game.specialEvent = { type: 'boss_meteor', timer: 0, duration: 0, active: true, data: { bossId: boss.id } };
+    }
+    game.lastEventLevel = game.level;
+  }, []);
+
   const splitMeteor = useCallback((meteor: Meteor) => {
     const game = gameRef.current;
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    // Boss meteor handling
+    if (meteor.isBoss && meteor.bossHp !== undefined) {
+      meteor.bossHp--;
+      meteor.tapCount++;
+      game.screenShake = Math.min(game.screenShake + 4, 12);
+      addParticles(meteor.x, meteor.y, 10, 300, 'spark');
+      playBossHit();
+
+      if (meteor.bossHp <= 0) {
+        // Boss defeated!
+        meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
+        addParticles(meteor.x, meteor.y, 40, 300, 'spark');
+        addParticles(meteor.x, meteor.y, 20, 50, 'debris');
+        game.score += Math.round(500 * game.scoreMultiplier);
+        game.bossDefeated++;
+        game.screenShake = 15;
+        game.specialEvent = null;
+        playBossDefeat();
+
+        // Boss drops guaranteed power-up
+        const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+        powerupsRef.current.push({
+          id: genId(), x: meteor.x, y: meteor.y,
+          vy: 0.2, type, life: 8000, radius: 18, pulse: 0,
+        });
+      }
+      return;
+    }
 
     meteor.tapCount++;
     const mult = game.scoreMultiplier;
@@ -207,12 +312,19 @@ export default function MeteorSplitGame() {
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current);
     }
 
+    const prevLevel = game.level;
     if (game.meteorsDestroyed > 0 && game.meteorsDestroyed % 15 === 0) {
-      game.level = Math.min(10, game.level + 1);
+      game.level = Math.min(20, game.level + 1);
+    }
+
+    // Trigger special event on level up
+    if (game.level > prevLevel && game.level - game.lastEventLevel >= EVENT_INTERVAL_LEVELS && game.level >= 3) {
+      triggerSpecialEvent(canvas.width, canvas.height);
     }
 
     if (game.chaosLevel >= 1) {
       game.gameOver = true;
+      stopBGM();
       playChaosOverload();
       if (game.score > game.highScore) {
         game.highScore = game.score;
@@ -228,7 +340,7 @@ export default function MeteorSplitGame() {
       addParticles(canvas.width / 2, canvas.height / 2, 50, 0, 'chaos');
       setScreen('gameover');
     }
-  }, []);
+  }, [triggerSpecialEvent]);
 
   const collectPowerUp = useCallback((pu: PowerUp) => {
     const game = gameRef.current;
@@ -251,6 +363,32 @@ export default function MeteorSplitGame() {
     }
   }, []);
 
+  const startGame = useCallback(() => {
+    const game = gameRef.current;
+    game.started = true;
+    game.gameOver = false;
+    game.score = 0;
+    game.level = 1;
+    game.meteorsDestroyed = 0;
+    game.chaosLevel = 0;
+    game.combo = 0;
+    game.comboTimer = 0;
+    game.maxCombo = 0;
+    game.slowmoTimer = 0;
+    game.scoreMultiTimer = 0;
+    game.scoreMultiplier = 1;
+    game.specialEvent = null;
+    game.lastEventLevel = 0;
+    game.bossDefeated = 0;
+    meteorsRef.current = [];
+    particlesRef.current = [];
+    powerupsRef.current = [];
+    spawnTimerRef.current = 0;
+    showerTimerRef.current = 0;
+    startBGM();
+    setScreen('playing');
+  }, []);
+
   const handleTap = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     const game = gameRef.current;
@@ -264,23 +402,14 @@ export default function MeteorSplitGame() {
     const y = (clientY - rect.top) * scaleY;
 
     if (!game.started) {
-      game.started = true;
-      game.gameOver = false;
-      game.score = 0;
-      game.level = 1;
-      game.meteorsDestroyed = 0;
-      game.chaosLevel = 0;
-      game.combo = 0;
-      game.comboTimer = 0;
-      game.maxCombo = 0;
-      game.slowmoTimer = 0;
-      game.scoreMultiTimer = 0;
-      game.scoreMultiplier = 1;
-      meteorsRef.current = [];
-      particlesRef.current = [];
-      powerupsRef.current = [];
-      spawnTimerRef.current = 0;
-      setScreen('playing');
+      if (!hasSeenTutorial.current) {
+        hasSeenTutorial.current = true;
+        localStorage.setItem(TUTORIAL_KEY, '1');
+        setTutorialStep(0);
+        setScreen('tutorial');
+        return;
+      }
+      startGame();
       return;
     }
 
@@ -299,12 +428,13 @@ export default function MeteorSplitGame() {
       }
     }
 
-    // Find tapped meteor
+    // Find tapped meteor (prioritize boss)
     let closest: Meteor | null = null;
     let closestDist = Infinity;
     for (const m of meteorsRef.current) {
       const d = Math.hypot(m.x - x, m.y - y);
-      if (d < m.radius * 1.3 && d < closestDist) {
+      const hitRadius = m.isBoss ? m.radius * 1.1 : m.radius * 1.3;
+      if (d < hitRadius && d < closestDist) {
         closest = m;
         closestDist = d;
       }
@@ -315,7 +445,7 @@ export default function MeteorSplitGame() {
     } else {
       game.combo = 0;
     }
-  }, [splitMeteor, collectPowerUp]);
+  }, [splitMeteor, collectPowerUp, startGame]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -355,12 +485,40 @@ export default function MeteorSplitGame() {
 
       if (game.started && !game.gameOver) {
         // Spawn
-        spawnTimerRef.current -= rawDt; // spawn on real time
+        spawnTimerRef.current -= rawDt;
         if (spawnTimerRef.current <= 0) {
           const interval = Math.max(800, 3000 - game.level * 250);
           spawnTimerRef.current = interval;
           const count = Math.min(3, 1 + Math.floor(game.level / 3));
           meteorsRef.current.push(...spawnMeteorsAtEdge(count, 0, w, h));
+        }
+
+        // Meteor shower event
+        if (game.specialEvent?.type === 'meteor_shower' && game.specialEvent.active) {
+          game.specialEvent.timer -= rawDt;
+          showerTimerRef.current -= rawDt;
+          if (showerTimerRef.current <= 0) {
+            showerTimerRef.current = 400; // rapid spawns
+            const count = 2 + Math.floor(Math.random() * 3);
+            const newMeteors = spawnMeteorsAtEdge(count, Math.random() < 0.3 ? 1 : 0, w, h);
+            newMeteors.forEach(m => {
+              m.vx *= 1.5;
+              m.vy *= 1.5;
+              m.hue = 40; // golden shower meteors
+            });
+            meteorsRef.current.push(...newMeteors);
+          }
+          if (game.specialEvent.timer <= 0) {
+            game.specialEvent = null;
+          }
+        }
+
+        // Check if boss defeated (remove event if boss gone)
+        if (game.specialEvent?.type === 'boss_meteor' && game.specialEvent.active) {
+          const bossId = game.specialEvent.data?.bossId;
+          if (bossId && !meteorsRef.current.find(m => m.id === bossId)) {
+            game.specialEvent = null;
+          }
         }
 
         // Combo timer
@@ -381,6 +539,9 @@ export default function MeteorSplitGame() {
         // Chaos decay
         game.chaosLevel = Math.max(0, game.chaosLevel - 0.0001 * dt);
 
+        // Update BGM intensity
+        updateBGMChaos(game.chaosLevel);
+
         // Screen shake decay
         game.screenShake *= 0.92;
 
@@ -391,13 +552,21 @@ export default function MeteorSplitGame() {
           m.rotation += m.rotationSpeed * dt * 0.06;
 
           m.trail.push({ x: m.x, y: m.y, age: 0 });
-          if (m.trail.length > 8) m.trail.shift();
+          if (m.trail.length > (m.isBoss ? 12 : 8)) m.trail.shift();
           for (const t of m.trail) t.age += dt * 0.001;
 
-          if (m.x < -m.radius * 2) m.x = w + m.radius;
-          if (m.x > w + m.radius * 2) m.x = -m.radius;
-          if (m.y < -m.radius * 2) m.y = h + m.radius;
-          if (m.y > h + m.radius * 2) m.y = -m.radius;
+          if (!m.isBoss) {
+            if (m.x < -m.radius * 2) m.x = w + m.radius;
+            if (m.x > w + m.radius * 2) m.x = -m.radius;
+            if (m.y < -m.radius * 2) m.y = h + m.radius;
+            if (m.y > h + m.radius * 2) m.y = -m.radius;
+          } else {
+            // Boss bounces off edges
+            if (m.x - m.radius < 0 || m.x + m.radius > w) m.vx *= -1;
+            if (m.y - m.radius < 0 || m.y + m.radius > h) m.vy *= -1;
+            m.x = Math.max(m.radius, Math.min(w - m.radius, m.x));
+            m.y = Math.max(m.radius, Math.min(h - m.radius, m.y));
+          }
         }
 
         // Update power-ups
@@ -451,6 +620,13 @@ export default function MeteorSplitGame() {
         ctx.fillRect(-10, -10, w + 20, h + 20);
       }
 
+      // Meteor shower overlay
+      if (game.specialEvent?.type === 'meteor_shower' && game.specialEvent.active) {
+        const pulse = 0.03 + Math.sin(now * 0.005) * 0.02;
+        ctx.fillStyle = `hsla(40, 90%, 50%, ${pulse})`;
+        ctx.fillRect(-10, -10, w + 20, h + 20);
+      }
+
       // Stars
       const t = now * 0.001;
       for (const s of starsRef.current) {
@@ -467,8 +643,9 @@ export default function MeteorSplitGame() {
           for (let i = 1; i < m.trail.length; i++) {
             ctx.lineTo(m.trail[i].x, m.trail[i].y);
           }
-          ctx.strokeStyle = `hsla(${m.hue}, 80%, 60%, 0.15)`;
-          ctx.lineWidth = m.radius * 0.5;
+          const trailHue = m.isBoss ? 300 : m.hue;
+          ctx.strokeStyle = `hsla(${trailHue}, 80%, 60%, ${m.isBoss ? 0.3 : 0.15})`;
+          ctx.lineWidth = m.radius * (m.isBoss ? 0.7 : 0.5);
           ctx.lineCap = 'round';
           ctx.stroke();
         }
@@ -480,43 +657,86 @@ export default function MeteorSplitGame() {
         ctx.translate(m.x, m.y);
         ctx.rotate(m.rotation);
 
-        const glowGrad = ctx.createRadialGradient(0, 0, m.radius * 0.2, 0, 0, m.radius * 2);
-        glowGrad.addColorStop(0, `hsla(${m.hue}, 80%, 60%, 0.3)`);
-        glowGrad.addColorStop(1, 'transparent');
-        ctx.fillStyle = glowGrad;
-        ctx.fillRect(-m.radius * 2, -m.radius * 2, m.radius * 4, m.radius * 4);
+        if (m.isBoss) {
+          // Boss glow - pulsing menacingly
+          const bPulse = 1 + Math.sin(now * 0.004) * 0.15;
+          const glowGrad = ctx.createRadialGradient(0, 0, m.radius * 0.2, 0, 0, m.radius * 3 * bPulse);
+          glowGrad.addColorStop(0, `hsla(300, 90%, 60%, 0.5)`);
+          glowGrad.addColorStop(0.5, `hsla(280, 80%, 40%, 0.2)`);
+          glowGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = glowGrad;
+          ctx.fillRect(-m.radius * 3, -m.radius * 3, m.radius * 6, m.radius * 6);
 
-        ctx.beginPath();
-        const verts = m.vertices;
-        for (let i = 0; i < verts.length; i++) {
-          const angle = (i / verts.length) * Math.PI * 2;
-          const r = m.radius * verts[i];
-          const px = Math.cos(angle) * r;
-          const py = Math.sin(angle) * r;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-
-        const bodyGrad = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 0, 0, 0, m.radius);
-        bodyGrad.addColorStop(0, `hsl(${m.hue}, 60%, 50%)`);
-        bodyGrad.addColorStop(0.6, `hsl(${m.hue}, 50%, 30%)`);
-        bodyGrad.addColorStop(1, `hsl(${m.hue}, 40%, 15%)`);
-        ctx.fillStyle = bodyGrad;
-        ctx.fill();
-
-        ctx.strokeStyle = `hsla(${m.hue}, 70%, 65%, 0.6)`;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-
-        for (let i = 0; i < 3; i++) {
-          const cx2 = (Math.sin(i * 2.1 + m.id.charCodeAt(1)) * m.radius * 0.4);
-          const cy2 = (Math.cos(i * 3.7 + m.id.charCodeAt(1)) * m.radius * 0.4);
-          const cr = m.radius * 0.12;
+          // Boss body
           ctx.beginPath();
-          ctx.arc(cx2, cy2, cr, 0, Math.PI * 2);
-          ctx.fillStyle = `hsla(${m.hue}, 30%, 20%, 0.5)`;
+          const verts = m.vertices;
+          for (let i = 0; i < verts.length; i++) {
+            const angle = (i / verts.length) * Math.PI * 2;
+            const r = m.radius * verts[i] * bPulse;
+            const px = Math.cos(angle) * r;
+            const py = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+
+          const bodyGrad = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 0, 0, 0, m.radius);
+          bodyGrad.addColorStop(0, `hsl(310, 70%, 55%)`);
+          bodyGrad.addColorStop(0.6, `hsl(290, 60%, 35%)`);
+          bodyGrad.addColorStop(1, `hsl(270, 50%, 18%)`);
+          ctx.fillStyle = bodyGrad;
           ctx.fill();
+
+          ctx.strokeStyle = `hsla(320, 90%, 75%, 0.8)`;
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+
+          // Boss eye
+          ctx.beginPath();
+          ctx.arc(0, 0, m.radius * 0.2, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(350, 100%, 60%, ${0.7 + Math.sin(now * 0.006) * 0.3})`;
+          ctx.fill();
+
+        } else {
+          // Normal meteor rendering
+          const glowGrad = ctx.createRadialGradient(0, 0, m.radius * 0.2, 0, 0, m.radius * 2);
+          glowGrad.addColorStop(0, `hsla(${m.hue}, 80%, 60%, 0.3)`);
+          glowGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = glowGrad;
+          ctx.fillRect(-m.radius * 2, -m.radius * 2, m.radius * 4, m.radius * 4);
+
+          ctx.beginPath();
+          const verts = m.vertices;
+          for (let i = 0; i < verts.length; i++) {
+            const angle = (i / verts.length) * Math.PI * 2;
+            const r = m.radius * verts[i];
+            const px = Math.cos(angle) * r;
+            const py = Math.sin(angle) * r;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+
+          const bodyGrad = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 0, 0, 0, m.radius);
+          bodyGrad.addColorStop(0, `hsl(${m.hue}, 60%, 50%)`);
+          bodyGrad.addColorStop(0.6, `hsl(${m.hue}, 50%, 30%)`);
+          bodyGrad.addColorStop(1, `hsl(${m.hue}, 40%, 15%)`);
+          ctx.fillStyle = bodyGrad;
+          ctx.fill();
+
+          ctx.strokeStyle = `hsla(${m.hue}, 70%, 65%, 0.6)`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          for (let i = 0; i < 3; i++) {
+            const cx2 = (Math.sin(i * 2.1 + m.id.charCodeAt(1)) * m.radius * 0.4);
+            const cy2 = (Math.cos(i * 3.7 + m.id.charCodeAt(1)) * m.radius * 0.4);
+            const cr = m.radius * 0.12;
+            ctx.beginPath();
+            ctx.arc(cx2, cy2, cr, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${m.hue}, 30%, 20%, 0.5)`;
+            ctx.fill();
+          }
         }
 
         ctx.restore();
@@ -531,14 +751,12 @@ export default function MeteorSplitGame() {
         ctx.save();
         ctx.translate(pu.x, pu.y);
 
-        // Glow
         const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, pulseR * 2.5);
         glow.addColorStop(0, `hsla(${hue}, 90%, 60%, ${0.4 * alpha})`);
         glow.addColorStop(1, 'transparent');
         ctx.fillStyle = glow;
         ctx.fillRect(-pulseR * 3, -pulseR * 3, pulseR * 6, pulseR * 6);
 
-        // Body
         ctx.beginPath();
         ctx.arc(0, 0, pulseR, 0, Math.PI * 2);
         ctx.fillStyle = `hsla(${hue}, 80%, 50%, ${0.9 * alpha})`;
@@ -547,7 +765,6 @@ export default function MeteorSplitGame() {
         ctx.lineWidth = 2;
         ctx.stroke();
 
-        // Icon
         ctx.fillStyle = `hsla(0, 0%, 100%, ${alpha})`;
         ctx.font = `${pulseR}px sans-serif`;
         ctx.textAlign = 'center';
@@ -564,7 +781,7 @@ export default function MeteorSplitGame() {
           ctx.fillStyle = `hsla(${p.hue}, 90%, 55%, ${alpha})`;
           ctx.shadowColor = `hsla(${p.hue}, 90%, 55%, ${alpha * 0.5})`;
           ctx.shadowBlur = 10;
-        } else if (p.type === 'spark') {
+        } else if (p.type === 'spark' || p.type === 'shower') {
           ctx.fillStyle = `hsla(${p.hue}, 80%, 70%, ${alpha})`;
           ctx.shadowColor = `hsla(${p.hue}, 80%, 70%, ${alpha * 0.5})`;
           ctx.shadowBlur = 6;
@@ -578,6 +795,25 @@ export default function MeteorSplitGame() {
 
       ctx.restore();
 
+      // Find boss for HP display
+      let bossHpPct = 0;
+      let showBossHp = false;
+      if (game.specialEvent?.type === 'boss_meteor') {
+        const boss = meteorsRef.current.find(m => m.isBoss);
+        if (boss && boss.bossHp !== undefined && boss.bossMaxHp) {
+          bossHpPct = boss.bossHp / boss.bossMaxHp;
+          showBossHp = true;
+        }
+      }
+
+      // Event text
+      let eventText = '';
+      if (game.specialEvent?.type === 'meteor_shower' && game.specialEvent.active) {
+        eventText = '☄️ METEOR SHOWER!';
+      } else if (game.specialEvent?.type === 'boss_meteor' && game.specialEvent.active) {
+        eventText = '👾 BOSS METEOR!';
+      }
+
       // UI update
       setUiState({
         score: game.score,
@@ -588,6 +824,9 @@ export default function MeteorSplitGame() {
         slowmo: game.slowmoTimer > 0,
         scoreMult: game.scoreMultiTimer > 0,
         scoreMultiplier: game.scoreMultiplier,
+        eventText,
+        bossHpPct,
+        showBossHp,
       });
 
       animRef.current = requestAnimationFrame(loop);
@@ -600,6 +839,7 @@ export default function MeteorSplitGame() {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('touchstart', onTouch);
       canvas.removeEventListener('mousedown', onClick);
+      stopBGM();
     };
   }, [handleTap, initStars]);
 
@@ -657,6 +897,100 @@ export default function MeteorSplitGame() {
         </div>
       )}
 
+      {/* Event Banner */}
+      {screen === 'playing' && uiState.eventText && (
+        <div className="absolute top-14 left-0 right-0 flex justify-center pointer-events-none z-10">
+          <div
+            className="font-display text-sm font-bold px-4 py-1.5 rounded-full animate-pulse"
+            style={{
+              backgroundColor: 'hsl(var(--card) / 0.8)',
+              color: uiState.eventText.includes('BOSS') ? 'hsl(300, 80%, 70%)' : 'hsl(40, 90%, 65%)',
+              border: `1px solid ${uiState.eventText.includes('BOSS') ? 'hsl(300, 60%, 50%)' : 'hsl(40, 70%, 50%)'}`,
+            }}
+          >
+            {uiState.eventText}
+          </div>
+        </div>
+      )}
+
+      {/* Boss HP Bar */}
+      {screen === 'playing' && uiState.showBossHp && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none z-10 flex flex-col items-center gap-1">
+          <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(300, 70%, 75%)' }}>
+            BOSS HP
+          </div>
+          <div className="w-40 h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${uiState.bossHpPct * 100}%`,
+                background: 'linear-gradient(90deg, hsl(300, 80%, 50%), hsl(340, 90%, 60%))',
+                boxShadow: '0 0 8px hsl(300, 80%, 60% / 0.6)',
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Tutorial Screen */}
+      {screen === 'tutorial' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-6">
+          <div
+            className="w-full max-w-sm rounded-2xl p-8 text-center"
+            style={{ backgroundColor: 'hsl(var(--card) / 0.95)', backdropFilter: 'blur(20px)' }}
+          >
+            <div className="text-5xl mb-4">{TUTORIAL_STEPS[tutorialStep].icon}</div>
+            <h2 className="font-display text-2xl font-black mb-3" style={{ color: 'hsl(var(--primary))' }}>
+              {TUTORIAL_STEPS[tutorialStep].title}
+            </h2>
+            <p className="font-body text-sm leading-relaxed mb-6" style={{ color: 'hsl(var(--muted-foreground))' }}>
+              {TUTORIAL_STEPS[tutorialStep].desc}
+            </p>
+
+            {/* Step dots */}
+            <div className="flex justify-center gap-2 mb-6">
+              {TUTORIAL_STEPS.map((_, i) => (
+                <div
+                  key={i}
+                  className="w-2 h-2 rounded-full transition-all"
+                  style={{
+                    backgroundColor: i === tutorialStep ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
+                    transform: i === tutorialStep ? 'scale(1.3)' : 'scale(1)',
+                  }}
+                />
+              ))}
+            </div>
+
+            <button
+              className="font-display text-sm px-8 py-3 rounded-lg w-full"
+              style={{
+                backgroundColor: 'hsl(var(--primary))',
+                color: 'hsl(var(--primary-foreground))',
+              }}
+              onClick={() => {
+                if (tutorialStep < TUTORIAL_STEPS.length - 1) {
+                  setTutorialStep(tutorialStep + 1);
+                } else {
+                  startGame();
+                }
+              }}
+            >
+              {tutorialStep < TUTORIAL_STEPS.length - 1 ? 'NEXT' : 'LET\'S GO!'}
+            </button>
+
+            {tutorialStep < TUTORIAL_STEPS.length - 1 && (
+              <button
+                className="font-body text-xs mt-3 opacity-60"
+                style={{ color: 'hsl(var(--muted-foreground))' }}
+                onClick={() => startGame()}
+              >
+                Skip tutorial
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Start Screen */}
       {screen === 'title' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
@@ -680,17 +1014,30 @@ export default function MeteorSplitGame() {
               Best: {uiState.highScore.toLocaleString()}
             </div>
           )}
-          <button
-            className="mt-8 font-display text-sm px-6 py-2 rounded-lg pointer-events-auto"
-            style={{
-              backgroundColor: 'hsl(var(--card))',
-              color: 'hsl(var(--secondary))',
-              border: '1px solid hsl(var(--border))',
-            }}
-            onClick={(e) => { e.stopPropagation(); setScreen('leaderboard'); }}
-          >
-            🏆 LEADERBOARD
-          </button>
+          <div className="flex gap-3 mt-8">
+            <button
+              className="font-display text-sm px-6 py-2 rounded-lg pointer-events-auto"
+              style={{
+                backgroundColor: 'hsl(var(--card))',
+                color: 'hsl(var(--secondary))',
+                border: '1px solid hsl(var(--border))',
+              }}
+              onClick={(e) => { e.stopPropagation(); setScreen('leaderboard'); }}
+            >
+              🏆 LEADERBOARD
+            </button>
+            <button
+              className="font-display text-sm px-6 py-2 rounded-lg pointer-events-auto"
+              style={{
+                backgroundColor: 'hsl(var(--card))',
+                color: 'hsl(var(--muted-foreground))',
+                border: '1px solid hsl(var(--border))',
+              }}
+              onClick={(e) => { e.stopPropagation(); setTutorialStep(0); setScreen('tutorial'); }}
+            >
+              ❓ HOW TO PLAY
+            </button>
+          </div>
         </div>
       )}
 
@@ -705,7 +1052,8 @@ export default function MeteorSplitGame() {
               {uiState.score.toLocaleString()}
             </div>
             <p className="font-body text-sm mb-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
-              Level {uiState.level} • {uiState.combo > 0 ? `Best combo: ${gameRef.current.maxCombo}x` : ''}
+              Level {uiState.level} • {gameRef.current.maxCombo > 0 ? `Best combo: ${gameRef.current.maxCombo}x` : ''}
+              {gameRef.current.bossDefeated > 0 ? ` • Bosses: ${gameRef.current.bossDefeated}` : ''}
             </p>
             {uiState.score >= uiState.highScore && uiState.score > 0 && (
               <p className="font-display text-sm mt-2" style={{ color: 'hsl(var(--score-gold))' }}>
