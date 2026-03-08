@@ -1,0 +1,9 @@
+{
+  "appId": "app.lovable.a9a7315e0dd048789e581bc7dd4489c8",
+  "appName": "Meteor Split",
+  "webDir": "dist",
+  "server": {
+    "url": "https://a9a7315e-0dd0-4878-9e58-1bc7dd4489c8.lovableproject.com?forceHideBadge=true",
+    "cleartext": true
+  }
+}
