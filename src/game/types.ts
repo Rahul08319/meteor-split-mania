@@ -36,6 +36,27 @@ export interface Star {
   twinkleOffset: number;
 }
 
+export type PowerUpType = 'slowmo' | 'chaos_reduce' | 'score_multi';
+
+export interface PowerUp {
+  id: string;
+  x: number;
+  y: number;
+  vy: number;
+  type: PowerUpType;
+  life: number;
+  radius: number;
+  pulse: number;
+}
+
+export interface LeaderboardEntry {
+  score: number;
+  level: number;
+  meteorsDestroyed: number;
+  maxCombo: number;
+  date: string;
+}
+
 export interface GameState {
   score: number;
   level: number;
@@ -47,4 +68,9 @@ export interface GameState {
   combo: number;
   comboTimer: number;
   screenShake: number;
+  maxCombo: number;
+  // Power-up active timers (ms remaining)
+  slowmoTimer: number;
+  scoreMultiTimer: number;
+  scoreMultiplier: number;
 }
