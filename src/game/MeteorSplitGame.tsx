@@ -1119,6 +1119,99 @@ export default function MeteorSplitGame() {
           </div>
         </div>
       )}
+
+      {/* Settings */}
+      {screen === 'settings' && (
+        <div className="absolute inset-0 flex flex-col items-center z-20 overflow-auto py-8 px-4">
+          <div className="w-full max-w-md rounded-2xl p-6" style={panelStyle}>
+            <h2 className="font-display text-2xl font-bold mb-6 text-center" style={{ color: 'hsl(var(--primary))' }}>⚙ SETTINGS</h2>
+
+            <div className="mb-6">
+              <div className="flex justify-between mb-2">
+                <span className="font-display text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>SFX Volume</span>
+                <span className="font-display text-xs" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.sfxVolume * 100)}%</span>
+              </div>
+              <Slider value={[settingsState.sfxVolume * 100]} max={100} step={1}
+                onValueChange={(v) => {
+                  const vol = v[0] / 100;
+                  setSettings({ sfxVolume: vol });
+                  setSfxVolume(vol);
+                  setSettingsState(getSettings());
+                }} />
+            </div>
+
+            <div className="mb-6">
+              <div className="flex justify-between mb-2">
+                <span className="font-display text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Music Volume</span>
+                <span className="font-display text-xs" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.musicVolume * 100)}%</span>
+              </div>
+              <Slider value={[settingsState.musicVolume * 100]} max={100} step={1}
+                onValueChange={(v) => {
+                  const vol = v[0] / 100;
+                  setSettings({ musicVolume: vol });
+                  setMusicVolume(vol);
+                  setSettingsState(getSettings());
+                }} />
+            </div>
+
+            <div className="flex items-center justify-between mb-8 rounded-lg p-3" style={{ backgroundColor: 'hsl(var(--muted) / 0.4)' }}>
+              <div>
+                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--foreground))' }}>Haptic Feedback</div>
+                <div className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Vibrate on mobile devices</div>
+              </div>
+              <Switch checked={settingsState.hapticsEnabled}
+                onCheckedChange={(c) => { setSettings({ hapticsEnabled: c }); setSettingsState(getSettings()); }} />
+            </div>
+
+            <div className="font-display text-xs uppercase tracking-widest mb-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
+              🏅 Achievements ({allUnlocked.length}/{ACHIEVEMENTS.length})
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-6">
+              {ACHIEVEMENTS.map(a => {
+                const unlocked = allUnlocked.includes(a.id);
+                return (
+                  <div key={a.id} className="rounded-lg p-2" style={{
+                    backgroundColor: unlocked ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--muted) / 0.3)',
+                    border: `1px solid ${unlocked ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--border))'}`,
+                    opacity: unlocked ? 1 : 0.55,
+                  }}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base">{unlocked ? a.icon : '🔒'}</span>
+                      <span className="font-display text-[11px] font-bold" style={{ color: 'hsl(var(--foreground))' }}>{a.title}</span>
+                    </div>
+                    <p className="font-body text-[9px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{a.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnPrimary}
+              onClick={() => setScreen('title')}>BACK</button>
+          </div>
+        </div>
+      )}
+
+      {/* Achievement toasts */}
+      {achievementToasts.length > 0 && (
+        <div className="absolute top-20 right-4 z-30 flex flex-col gap-2 pointer-events-none">
+          {achievementToasts.map(a => (
+            <div key={a.id} className="rounded-lg px-4 py-3 flex items-center gap-3 animate-in slide-in-from-right" style={{
+              backgroundColor: 'hsl(var(--card) / 0.95)',
+              border: '1px solid hsl(var(--primary))',
+              backdropFilter: 'blur(20px)',
+              boxShadow: '0 4px 20px hsl(var(--primary) / 0.4)',
+              minWidth: 220,
+            }}>
+              <div className="text-2xl">{a.icon}</div>
+              <div>
+                <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(var(--score-gold))' }}>Achievement</div>
+                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--foreground))' }}>{a.title}</div>
+                <div className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{a.description}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
