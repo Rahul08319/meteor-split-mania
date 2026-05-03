@@ -936,6 +936,8 @@ export default function MeteorSplitGame() {
               onClick={(e) => { e.stopPropagation(); refreshUnlocks(); setScreen('skins'); }}>🎨 SKINS</button>
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); setTutorialStep(0); setScreen('tutorial'); }}>❓ HOW TO</button>
+            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
+              onClick={(e) => { e.stopPropagation(); setSettingsState(getSettings()); setScreen('settings'); }}>⚙ SETTINGS</button>
           </div>
         </div>
       )}
