@@ -1,10 +1,13 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { Meteor, Particle, Star, GameState, PowerUp, PowerUpType } from './types';
-import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM } from './sounds';
+import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM, setSfxVolume, setMusicVolume } from './sounds';
 import { addLeaderboardEntry, getLeaderboard, getStats } from './leaderboard';
 import { Difficulty, DIFFICULTY_CONFIGS, DifficultyConfig } from './difficulty';
 import { getDailySeed, getDailyModifiers, getDailyLeaderboard, addDailyEntry, getDailyAttempts, getDailyBestScore, SeededRNG, DailyModifiers } from './daily';
 import { METEOR_SKINS, VISUAL_THEMES, MeteorSkin, VisualTheme, getSelectedSkin, setSelectedSkin, getSelectedTheme, setSelectedTheme, getUnlockStats, addBossDefeat, MeteorSkinId, ThemeId, UnlockStats } from './skins';
+import { getSettings, setSettings } from './settings';
+import { hapticSplit, hapticDestroy, hapticPowerUp, hapticChaos, hapticBoss } from './haptics';
+import { ACHIEVEMENTS, checkAchievements, getAllUnlocked, Achievement } from './achievements';
 
 const MAX_METEORS = 60;
 const CHAOS_THRESHOLD = 0.7;
