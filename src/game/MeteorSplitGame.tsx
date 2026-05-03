@@ -418,6 +418,7 @@ export default function MeteorSplitGame() {
     powerupsRef.current = [];
     spawnTimerRef.current = 0;
     showerTimerRef.current = 0;
+    powerupsCollectedRef.current = 0;
     startBGM();
     setScreen('playing');
   }, [difficulty, selectedSkinId, selectedThemeId]);
