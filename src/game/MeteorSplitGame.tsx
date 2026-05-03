@@ -157,6 +157,27 @@ export default function MeteorSplitGame() {
   const [stats, setStats] = useState(getStats());
   const [dailyLeaderboard, setDailyLeaderboard] = useState(getDailyLeaderboard());
   const [unlockStats, setUnlockStats] = useState<UnlockStats>(getUnlockStats(getStats()));
+  const [settingsState, setSettingsState] = useState(getSettings());
+  const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
+  const [allUnlocked, setAllUnlocked] = useState<string[]>(getAllUnlocked());
+  const powerupsCollectedRef = useRef(0);
+
+  const triggerAchievementCheck = useCallback(() => {
+    const g = gameRef.current;
+    const newly = checkAchievements({
+      score: g.score, level: g.level, combo: g.maxCombo,
+      meteorsDestroyed: g.meteorsDestroyed, bossDefeated: g.bossDefeated,
+      chaosLevel: g.chaosLevel, powerupsCollected: powerupsCollectedRef.current,
+      gamesPlayed: stats?.gamesPlayed || 0,
+    });
+    if (newly.length) {
+      setAchievementToasts(prev => [...prev, ...newly]);
+      setAllUnlocked(getAllUnlocked());
+      newly.forEach((a, i) => {
+        setTimeout(() => setAchievementToasts(prev => prev.filter(x => x.id !== a.id)), 4000 + i * 600);
+      });
+    }
+  }, [stats]);
 
   const hasSeenTutorial = useRef(localStorage.getItem(TUTORIAL_KEY) === '1');
 
