@@ -254,8 +254,12 @@ export default function MeteorSplitGame() {
         game.screenShake = 15;
         game.specialEvent = null;
         playBossDefeat();
+        hapticBoss();
         const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
         powerupsRef.current.push({ id: genId(), x: meteor.x, y: meteor.y, vy: 0.2, type, life: 8000, radius: 18, pulse: 0 });
+        triggerAchievementCheck();
+      } else {
+        hapticSplit();
       }
       return;
     }
@@ -273,8 +277,10 @@ export default function MeteorSplitGame() {
       game.comboTimer = COMBO_TIMEOUT;
       game.screenShake = Math.min(game.screenShake + 2, 8);
       playDestroy();
+      hapticDestroy();
       if (game.combo > 2) playCombo(game.combo);
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current, cfg.powerUpDropChance);
+      triggerAchievementCheck();
       return;
     }
 
@@ -284,6 +290,7 @@ export default function MeteorSplitGame() {
       game.screenShake = Math.min(game.screenShake + 5, 15);
       addParticles(meteor.x, meteor.y, 20, 0, 'chaos');
       playChaos();
+      hapticChaos();
       const count = 3 + Math.floor(Math.random() * 3);
       meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
       if (meteorsRef.current.length < MAX_METEORS) {
@@ -303,6 +310,7 @@ export default function MeteorSplitGame() {
       addParticles(meteor.x, meteor.y, 12, skin.particleHue, 'spark');
       addParticles(meteor.x, meteor.y, 5, skin.particleHue, 'debris');
       playSplit(meteor.generation);
+      hapticSplit();
       for (let i = 0; i < 2; i++) {
         if (meteorsRef.current.length < MAX_METEORS) {
           const nm = createMeteor(meteor.x + (Math.random() - 0.5) * 20, meteor.y + (Math.random() - 0.5) * 20, meteor.generation + 1, canvas.width, canvas.height, skin);
@@ -319,6 +327,7 @@ export default function MeteorSplitGame() {
       game.screenShake = Math.min(game.screenShake + 3, 10);
       if (game.combo > 2) playCombo(game.combo);
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current, cfg.powerUpDropChance);
+      triggerAchievementCheck();
     }
 
     const prevLevel = game.level;
