@@ -371,13 +371,16 @@ export default function MeteorSplitGame() {
     const game = gameRef.current;
     powerupsRef.current = powerupsRef.current.filter(p => p.id !== pu.id);
     playPowerUp();
+    hapticPowerUp();
+    powerupsCollectedRef.current++;
     addParticles(pu.x, pu.y, 15, POWERUP_COLORS[pu.type], 'spark');
     switch (pu.type) {
       case 'slowmo': game.slowmoTimer = POWERUP_DURATION; break;
       case 'chaos_reduce': game.chaosLevel = Math.max(0, game.chaosLevel - 0.3); game.screenShake = Math.min(game.screenShake + 3, 8); break;
       case 'score_multi': game.scoreMultiTimer = POWERUP_DURATION; game.scoreMultiplier = 3; break;
     }
-  }, []);
+    triggerAchievementCheck();
+  }, [triggerAchievementCheck]);
 
   const startGame = useCallback((mode: GameMode = 'classic') => {
     const game = gameRef.current;
