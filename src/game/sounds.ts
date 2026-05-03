@@ -1,9 +1,40 @@
 // Web Audio API sound effects - procedurally generated
+import { getSettings } from './settings';
+
 let audioCtx: AudioContext | null = null;
+let sfxBus: GainNode | null = null;
+let musicBus: GainNode | null = null;
 
 const getCtx = (): AudioContext => {
   if (!audioCtx) audioCtx = new AudioContext();
   return audioCtx;
+};
+
+const getSfxBus = (): GainNode => {
+  const ctx = getCtx();
+  if (!sfxBus) {
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = getSettings().sfxVolume;
+    sfxBus.connect(ctx.destination);
+  }
+  return sfxBus;
+};
+
+const getMusicBus = (): GainNode => {
+  const ctx = getCtx();
+  if (!musicBus) {
+    musicBus = ctx.createGain();
+    musicBus.gain.value = getSettings().musicVolume;
+    musicBus.connect(ctx.destination);
+  }
+  return musicBus;
+};
+
+export const setSfxVolume = (v: number) => {
+  if (sfxBus && audioCtx) sfxBus.gain.setValueAtTime(v, audioCtx.currentTime);
+};
+export const setMusicVolume = (v: number) => {
+  if (musicBus && audioCtx) musicBus.gain.setValueAtTime(v, audioCtx.currentTime);
 };
 
 export const resumeAudio = () => {
@@ -15,7 +46,7 @@ export const playSplit = (generation: number) => {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(getSfxBus());
   
   const baseFreq = 300 + generation * 200;
   osc.type = 'triangle';
@@ -37,7 +68,7 @@ export const playDestroy = () => {
   const filter = ctx.createBiquadFilter();
   osc.connect(filter);
   filter.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(getSfxBus());
   
   osc.type = 'sawtooth';
   osc.frequency.setValueAtTime(800, ctx.currentTime);
@@ -58,7 +89,7 @@ export const playChaos = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getSfxBus());
     
     osc.type = 'square';
     osc.frequency.setValueAtTime(100 + Math.random() * 200, ctx.currentTime + i * 0.05);
@@ -80,7 +111,7 @@ export const playCombo = (comboLevel: number) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getSfxBus());
     
     osc.type = 'sine';
     osc.frequency.setValueAtTime(baseNote * (1 + i * 0.5), ctx.currentTime + i * 0.06);
@@ -100,7 +131,7 @@ export const playChaosOverload = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getSfxBus());
     
     osc.type = i % 2 === 0 ? 'sawtooth' : 'square';
     osc.frequency.setValueAtTime(200 - i * 30, ctx.currentTime + i * 0.1);
@@ -121,7 +152,7 @@ export const playPowerUp = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getSfxBus());
     
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.08);
@@ -142,7 +173,7 @@ export const playBossHit = () => {
   const filter = ctx.createBiquadFilter();
   osc.connect(filter);
   filter.connect(gain);
-  gain.connect(ctx.destination);
+  gain.connect(getSfxBus());
 
   osc.type = 'sawtooth';
   osc.frequency.setValueAtTime(150, ctx.currentTime);
@@ -164,7 +195,7 @@ export const playBossDefeat = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getSfxBus());
 
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
@@ -184,7 +215,7 @@ export const playShowerWarning = () => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(getSfxBus());
 
     osc.type = 'sine';
     osc.frequency.setValueAtTime(880, ctx.currentTime + i * 0.15);
@@ -225,7 +256,7 @@ export const startBGM = () => {
   // Master gain
   const master = ctx.createGain();
   master.gain.setValueAtTime(0.06, ctx.currentTime);
-  master.connect(ctx.destination);
+  master.connect(getMusicBus());
   bgmNodes.masterGain = master;
 
   // Deep bass pulse

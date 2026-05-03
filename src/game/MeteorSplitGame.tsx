@@ -1,10 +1,15 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { Meteor, Particle, Star, GameState, PowerUp, PowerUpType } from './types';
-import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM } from './sounds';
+import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM, setSfxVolume, setMusicVolume } from './sounds';
 import { addLeaderboardEntry, getLeaderboard, getStats } from './leaderboard';
 import { Difficulty, DIFFICULTY_CONFIGS, DifficultyConfig } from './difficulty';
 import { getDailySeed, getDailyModifiers, getDailyLeaderboard, addDailyEntry, getDailyAttempts, getDailyBestScore, SeededRNG, DailyModifiers } from './daily';
 import { METEOR_SKINS, VISUAL_THEMES, MeteorSkin, VisualTheme, getSelectedSkin, setSelectedSkin, getSelectedTheme, setSelectedTheme, getUnlockStats, addBossDefeat, MeteorSkinId, ThemeId, UnlockStats } from './skins';
+import { getSettings, setSettings } from './settings';
+import { hapticSplit, hapticDestroy, hapticPowerUp, hapticChaos, hapticBoss } from './haptics';
+import { ACHIEVEMENTS, checkAchievements, getAllUnlocked, Achievement } from './achievements';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 
 const MAX_METEORS = 60;
 const CHAOS_THRESHOLD = 0.7;
@@ -154,6 +159,27 @@ export default function MeteorSplitGame() {
   const [stats, setStats] = useState(getStats());
   const [dailyLeaderboard, setDailyLeaderboard] = useState(getDailyLeaderboard());
   const [unlockStats, setUnlockStats] = useState<UnlockStats>(getUnlockStats(getStats()));
+  const [settingsState, setSettingsState] = useState(getSettings());
+  const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
+  const [allUnlocked, setAllUnlocked] = useState<string[]>(getAllUnlocked());
+  const powerupsCollectedRef = useRef(0);
+
+  const triggerAchievementCheck = useCallback(() => {
+    const g = gameRef.current;
+    const newly = checkAchievements({
+      score: g.score, level: g.level, combo: g.maxCombo,
+      meteorsDestroyed: g.meteorsDestroyed, bossDefeated: g.bossDefeated,
+      chaosLevel: g.chaosLevel, powerupsCollected: powerupsCollectedRef.current,
+      gamesPlayed: stats?.gamesPlayed || 0,
+    });
+    if (newly.length) {
+      setAchievementToasts(prev => [...prev, ...newly]);
+      setAllUnlocked(getAllUnlocked());
+      newly.forEach((a, i) => {
+        setTimeout(() => setAchievementToasts(prev => prev.filter(x => x.id !== a.id)), 4000 + i * 600);
+      });
+    }
+  }, [stats]);
 
   const hasSeenTutorial = useRef(localStorage.getItem(TUTORIAL_KEY) === '1');
 
@@ -230,8 +256,12 @@ export default function MeteorSplitGame() {
         game.screenShake = 15;
         game.specialEvent = null;
         playBossDefeat();
+        hapticBoss();
         const type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
         powerupsRef.current.push({ id: genId(), x: meteor.x, y: meteor.y, vy: 0.2, type, life: 8000, radius: 18, pulse: 0 });
+        triggerAchievementCheck();
+      } else {
+        hapticSplit();
       }
       return;
     }
@@ -249,8 +279,10 @@ export default function MeteorSplitGame() {
       game.comboTimer = COMBO_TIMEOUT;
       game.screenShake = Math.min(game.screenShake + 2, 8);
       playDestroy();
+      hapticDestroy();
       if (game.combo > 2) playCombo(game.combo);
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current, cfg.powerUpDropChance);
+      triggerAchievementCheck();
       return;
     }
 
@@ -260,6 +292,7 @@ export default function MeteorSplitGame() {
       game.screenShake = Math.min(game.screenShake + 5, 15);
       addParticles(meteor.x, meteor.y, 20, 0, 'chaos');
       playChaos();
+      hapticChaos();
       const count = 3 + Math.floor(Math.random() * 3);
       meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
       if (meteorsRef.current.length < MAX_METEORS) {
@@ -279,6 +312,7 @@ export default function MeteorSplitGame() {
       addParticles(meteor.x, meteor.y, 12, skin.particleHue, 'spark');
       addParticles(meteor.x, meteor.y, 5, skin.particleHue, 'debris');
       playSplit(meteor.generation);
+      hapticSplit();
       for (let i = 0; i < 2; i++) {
         if (meteorsRef.current.length < MAX_METEORS) {
           const nm = createMeteor(meteor.x + (Math.random() - 0.5) * 20, meteor.y + (Math.random() - 0.5) * 20, meteor.generation + 1, canvas.width, canvas.height, skin);
@@ -295,6 +329,7 @@ export default function MeteorSplitGame() {
       game.screenShake = Math.min(game.screenShake + 3, 10);
       if (game.combo > 2) playCombo(game.combo);
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current, cfg.powerUpDropChance);
+      triggerAchievementCheck();
     }
 
     const prevLevel = game.level;
@@ -338,13 +373,16 @@ export default function MeteorSplitGame() {
     const game = gameRef.current;
     powerupsRef.current = powerupsRef.current.filter(p => p.id !== pu.id);
     playPowerUp();
+    hapticPowerUp();
+    powerupsCollectedRef.current++;
     addParticles(pu.x, pu.y, 15, POWERUP_COLORS[pu.type], 'spark');
     switch (pu.type) {
       case 'slowmo': game.slowmoTimer = POWERUP_DURATION; break;
       case 'chaos_reduce': game.chaosLevel = Math.max(0, game.chaosLevel - 0.3); game.screenShake = Math.min(game.screenShake + 3, 8); break;
       case 'score_multi': game.scoreMultiTimer = POWERUP_DURATION; game.scoreMultiplier = 3; break;
     }
-  }, []);
+    triggerAchievementCheck();
+  }, [triggerAchievementCheck]);
 
   const startGame = useCallback((mode: GameMode = 'classic') => {
     const game = gameRef.current;
@@ -380,6 +418,7 @@ export default function MeteorSplitGame() {
     powerupsRef.current = [];
     spawnTimerRef.current = 0;
     showerTimerRef.current = 0;
+    powerupsCollectedRef.current = 0;
     startBGM();
     setScreen('playing');
   }, [difficulty, selectedSkinId, selectedThemeId]);
@@ -900,6 +939,8 @@ export default function MeteorSplitGame() {
               onClick={(e) => { e.stopPropagation(); refreshUnlocks(); setScreen('skins'); }}>🎨 SKINS</button>
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); setTutorialStep(0); setScreen('tutorial'); }}>❓ HOW TO</button>
+            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
+              onClick={(e) => { e.stopPropagation(); setSettingsState(getSettings()); setScreen('settings'); }}>⚙ SETTINGS</button>
           </div>
         </div>
       )}
@@ -1077,6 +1118,99 @@ export default function MeteorSplitGame() {
             <button className="mt-6 w-full font-display text-sm px-6 py-3 rounded-lg" style={btnPrimary}
               onClick={() => setScreen('title')}>BACK</button>
           </div>
+        </div>
+      )}
+
+      {/* Settings */}
+      {screen === 'settings' && (
+        <div className="absolute inset-0 flex flex-col items-center z-20 overflow-auto py-8 px-4">
+          <div className="w-full max-w-md rounded-2xl p-6" style={panelStyle}>
+            <h2 className="font-display text-2xl font-bold mb-6 text-center" style={{ color: 'hsl(var(--primary))' }}>⚙ SETTINGS</h2>
+
+            <div className="mb-6">
+              <div className="flex justify-between mb-2">
+                <span className="font-display text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>SFX Volume</span>
+                <span className="font-display text-xs" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.sfxVolume * 100)}%</span>
+              </div>
+              <Slider value={[settingsState.sfxVolume * 100]} max={100} step={1}
+                onValueChange={(v) => {
+                  const vol = v[0] / 100;
+                  setSettings({ sfxVolume: vol });
+                  setSfxVolume(vol);
+                  setSettingsState(getSettings());
+                }} />
+            </div>
+
+            <div className="mb-6">
+              <div className="flex justify-between mb-2">
+                <span className="font-display text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Music Volume</span>
+                <span className="font-display text-xs" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.musicVolume * 100)}%</span>
+              </div>
+              <Slider value={[settingsState.musicVolume * 100]} max={100} step={1}
+                onValueChange={(v) => {
+                  const vol = v[0] / 100;
+                  setSettings({ musicVolume: vol });
+                  setMusicVolume(vol);
+                  setSettingsState(getSettings());
+                }} />
+            </div>
+
+            <div className="flex items-center justify-between mb-8 rounded-lg p-3" style={{ backgroundColor: 'hsl(var(--muted) / 0.4)' }}>
+              <div>
+                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--foreground))' }}>Haptic Feedback</div>
+                <div className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Vibrate on mobile devices</div>
+              </div>
+              <Switch checked={settingsState.hapticsEnabled}
+                onCheckedChange={(c) => { setSettings({ hapticsEnabled: c }); setSettingsState(getSettings()); }} />
+            </div>
+
+            <div className="font-display text-xs uppercase tracking-widest mb-3" style={{ color: 'hsl(var(--muted-foreground))' }}>
+              🏅 Achievements ({allUnlocked.length}/{ACHIEVEMENTS.length})
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-6">
+              {ACHIEVEMENTS.map(a => {
+                const unlocked = allUnlocked.includes(a.id);
+                return (
+                  <div key={a.id} className="rounded-lg p-2" style={{
+                    backgroundColor: unlocked ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--muted) / 0.3)',
+                    border: `1px solid ${unlocked ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--border))'}`,
+                    opacity: unlocked ? 1 : 0.55,
+                  }}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-base">{unlocked ? a.icon : '🔒'}</span>
+                      <span className="font-display text-[11px] font-bold" style={{ color: 'hsl(var(--foreground))' }}>{a.title}</span>
+                    </div>
+                    <p className="font-body text-[9px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{a.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnPrimary}
+              onClick={() => setScreen('title')}>BACK</button>
+          </div>
+        </div>
+      )}
+
+      {/* Achievement toasts */}
+      {achievementToasts.length > 0 && (
+        <div className="absolute top-20 right-4 z-30 flex flex-col gap-2 pointer-events-none">
+          {achievementToasts.map(a => (
+            <div key={a.id} className="rounded-lg px-4 py-3 flex items-center gap-3 animate-in slide-in-from-right" style={{
+              backgroundColor: 'hsl(var(--card) / 0.95)',
+              border: '1px solid hsl(var(--primary))',
+              backdropFilter: 'blur(20px)',
+              boxShadow: '0 4px 20px hsl(var(--primary) / 0.4)',
+              minWidth: 220,
+            }}>
+              <div className="text-2xl">{a.icon}</div>
+              <div>
+                <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(var(--score-gold))' }}>Achievement</div>
+                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--foreground))' }}>{a.title}</div>
+                <div className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{a.description}</div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
