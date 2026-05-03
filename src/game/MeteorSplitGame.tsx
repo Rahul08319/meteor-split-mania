@@ -8,6 +8,8 @@ import { METEOR_SKINS, VISUAL_THEMES, MeteorSkin, VisualTheme, getSelectedSkin, 
 import { getSettings, setSettings } from './settings';
 import { hapticSplit, hapticDestroy, hapticPowerUp, hapticChaos, hapticBoss } from './haptics';
 import { ACHIEVEMENTS, checkAchievements, getAllUnlocked, Achievement } from './achievements';
+import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 
 const MAX_METEORS = 60;
 const CHAOS_THRESHOLD = 0.7;
