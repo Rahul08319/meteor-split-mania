@@ -1,9 +1,40 @@
 // Web Audio API sound effects - procedurally generated
+import { getSettings } from './settings';
+
 let audioCtx: AudioContext | null = null;
+let sfxBus: GainNode | null = null;
+let musicBus: GainNode | null = null;
 
 const getCtx = (): AudioContext => {
   if (!audioCtx) audioCtx = new AudioContext();
   return audioCtx;
+};
+
+const getSfxBus = (): GainNode => {
+  const ctx = getCtx();
+  if (!sfxBus) {
+    sfxBus = ctx.createGain();
+    sfxBus.gain.value = getSettings().sfxVolume;
+    sfxBus.connect(ctx.destination);
+  }
+  return sfxBus;
+};
+
+const getMusicBus = (): GainNode => {
+  const ctx = getCtx();
+  if (!musicBus) {
+    musicBus = ctx.createGain();
+    musicBus.gain.value = getSettings().musicVolume;
+    musicBus.connect(ctx.destination);
+  }
+  return musicBus;
+};
+
+export const setSfxVolume = (v: number) => {
+  if (sfxBus && audioCtx) sfxBus.gain.setValueAtTime(v, audioCtx.currentTime);
+};
+export const setMusicVolume = (v: number) => {
+  if (musicBus && audioCtx) musicBus.gain.setValueAtTime(v, audioCtx.currentTime);
 };
 
 export const resumeAudio = () => {
