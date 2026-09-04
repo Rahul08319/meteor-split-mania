@@ -70,10 +70,10 @@ export const pushSave = async () => {
   const snap = collectSnapshot();
   const { error } = await supabase.from('game_saves').upsert({
     user_id: user.id,
-    settings: snap.settings as unknown as Record<string, unknown>,
-    unlocks: snap.unlocks as unknown as Record<string, unknown>,
-    leaderboard: snap.leaderboard as unknown as Record<string, unknown>[],
-    achievements: snap.achievements,
+    settings: JSON.parse(JSON.stringify(snap.settings)),
+    unlocks: JSON.parse(JSON.stringify(snap.unlocks)),
+    leaderboard: JSON.parse(JSON.stringify(snap.leaderboard)),
+    achievements: JSON.parse(JSON.stringify(snap.achievements)),
   });
   if (error) throw error;
 };
