@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      game_saves: {
+        Row: {
+          achievements: Json
+          created_at: string
+          leaderboard: Json
+          settings: Json
+          unlocks: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          achievements?: Json
+          created_at?: string
+          leaderboard?: Json
+          settings?: Json
+          unlocks?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          achievements?: Json
+          created_at?: string
+          leaderboard?: Json
+          settings?: Json
+          unlocks?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
