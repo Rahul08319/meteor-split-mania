@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { Meteor, Particle, Star, GameState, PowerUp, PowerUpType } from './types';
-import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM, setSfxVolume, setMusicVolume } from './sounds';
+import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM, setSfxVolume, setMusicVolume, setHostAudioEnabled, suspendAudio } from './sounds';
 import { addLeaderboardEntry, getLeaderboard, getStats } from './leaderboard';
 import { Difficulty, DIFFICULTY_CONFIGS, DifficultyConfig } from './difficulty';
 import { getDailySeed, getDailyModifiers, getDailyLeaderboard, addDailyEntry, getDailyAttempts, getDailyBestScore, SeededRNG, DailyModifiers } from './daily';
@@ -10,6 +10,10 @@ import { hapticSplit, hapticDestroy, hapticPowerUp, hapticChaos, hapticBoss } fr
 import { ACHIEVEMENTS, checkAchievements, getAllUnlocked, Achievement } from './achievements';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore } from './youtubePlayables';
+import { createRunMissions, RunMission, updateRunMissions } from './missions';
+import { addWeeklyEntry, getWeeklyAttempts, getWeeklyBestScore, getWeeklyLeaderboard, getWeeklyModifiers, getWeekKey } from './weekly';
+import { applyUiScale, isReducedMotion, mapHue } from './a11y';
 
 const MAX_METEORS = 60;
 const CHAOS_THRESHOLD = 0.7;
@@ -17,7 +21,15 @@ const COMBO_TIMEOUT = 2000;
 const POWERUP_DURATION = 5000;
 const EVENT_INTERVAL_LEVELS = 3;
 const SHOWER_DURATION = 6000;
+const PULSE_COOLDOWN = 12000;
 const TUTORIAL_KEY = 'meteorSplit_tutorialSeen';
+
+const BIOMES = [
+  { name: 'NEBULA FRINGE', hue: 275 }, { name: 'SOLAR FRONT', hue: 32 },
+  { name: 'CRYSTAL DRIFT', hue: 190 }, { name: 'VOID CITADEL', hue: 315 },
+  { name: 'AURORA REACH', hue: 145 },
+];
+const getBiome = (level: number) => BIOMES[Math.floor((level - 1) / 5) % BIOMES.length];
 
 let idCounter = 0;
 const genId = () => `m${++idCounter}`;
@@ -64,10 +76,14 @@ const createBossMeteor = (w: number, h: number, level: number, bossHpBase: numbe
   const hp = bossHpBase + Math.floor(level * bossHpPerLevel);
   const boss: Meteor = {
     id: genId(), x, y, vx: 0, vy: 0,
-    radius: 70 + level * 3, rotation: 0, rotationSpeed: 0.005,
+    radius: Math.min(120, 70 + level * 3), rotation: 0, rotationSpeed: 0.005,
     generation: 0, opacity: 1, hue: 300, tapCount: 0,
     vertices: createVertices(12), trail: [],
     isBoss: true, bossHp: hp, bossMaxHp: hp,
+    bossShield: 2 + (level % 3), bossMaxShield: 2 + (level % 3),
+    bossWeakPointAngle: Math.random() * Math.PI * 2,
+    bossOrbitPhase: Math.random() * Math.PI * 2,
+    bossOrbiters: 3 + (level % 3),
   };
   const cx = w / 2 + (Math.random() - 0.5) * w * 0.3;
   const cy = h / 2 + (Math.random() - 0.5) * h * 0.3;
@@ -109,8 +125,8 @@ const maybeSpawnPowerUp = (x: number, y: number, powerups: PowerUp[], dropChance
   }
 };
 
-type Screen = 'title' | 'playing' | 'gameover' | 'leaderboard' | 'tutorial' | 'settings' | 'daily' | 'skins';
-type GameMode = 'classic' | 'daily';
+type Screen = 'title' | 'playing' | 'gameover' | 'leaderboard' | 'tutorial' | 'settings' | 'daily' | 'weekly' | 'skins';
+type GameMode = 'classic' | 'daily' | 'weekly';
 
 interface TutorialStep { title: string; desc: string; icon: string; }
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -129,6 +145,7 @@ export default function MeteorSplitGame() {
     combo: 0, comboTimer: 0, screenShake: 0, maxCombo: 0,
     slowmoTimer: 0, scoreMultiTimer: 0, scoreMultiplier: 1,
     specialEvent: null, lastEventLevel: 0, bossDefeated: 0,
+    pulseCooldown: 0, runTime: 0, taps: 0, hits: 0,
   });
   const meteorsRef = useRef<Meteor[]>([]);
   const particlesRef = useRef<Particle[]>([]);
@@ -137,8 +154,11 @@ export default function MeteorSplitGame() {
   const spawnTimerRef = useRef(0);
   const showerTimerRef = useRef(0);
   const animRef = useRef(0);
+  const isHostPausedRef = useRef(false);
+  const viewportRef = useRef({ width: 1, height: 1, dpr: 1 });
 
   const [screen, setScreen] = useState<Screen>('title');
+  const screenRef = useRef<Screen>('title');
   const [tutorialStep, setTutorialStep] = useState(0);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [gameMode, setGameMode] = useState<GameMode>('classic');
@@ -153,16 +173,23 @@ export default function MeteorSplitGame() {
   const [uiState, setUiState] = useState({
     score: 0, level: 1, chaos: 0, highScore: gameRef.current.highScore, combo: 0,
     slowmo: false, scoreMult: false, scoreMultiplier: 1,
-    eventText: '', bossHpPct: 0, showBossHp: false,
+    eventText: '', bossHpPct: 0, bossShieldPct: 0, showBossHp: false,
+    pulseCooldown: 0, biome: BIOMES[0].name,
   });
   const [leaderboard, setLeaderboard] = useState(getLeaderboard());
   const [stats, setStats] = useState(getStats());
   const [dailyLeaderboard, setDailyLeaderboard] = useState(getDailyLeaderboard());
+  const [weeklyLeaderboard, setWeeklyLeaderboard] = useState(getWeeklyLeaderboard());
   const [unlockStats, setUnlockStats] = useState<UnlockStats>(getUnlockStats(getStats()));
   const [settingsState, setSettingsState] = useState(getSettings());
   const [achievementToasts, setAchievementToasts] = useState<Achievement[]>([]);
   const [allUnlocked, setAllUnlocked] = useState<string[]>(getAllUnlocked());
   const powerupsCollectedRef = useRef(0);
+  const missionsRef = useRef<RunMission[]>(createRunMissions());
+  const [missions, setMissions] = useState<RunMission[]>(missionsRef.current);
+
+  useEffect(() => { screenRef.current = screen; }, [screen]);
+  useEffect(() => { applyUiScale(settingsState.uiScale); }, [settingsState.uiScale]);
 
   const triggerAchievementCheck = useCallback(() => {
     const g = gameRef.current;
@@ -188,6 +215,17 @@ export default function MeteorSplitGame() {
     const s = getStats();
     setStats(s);
     setUnlockStats(getUnlockStats(s));
+  }, []);
+
+  const updateMissionProgress = useCallback(() => {
+    const game = gameRef.current;
+    const next = updateRunMissions(missionsRef.current, {
+      destroyed: game.meteorsDestroyed,
+      combo: game.maxCombo,
+      score: game.score,
+    });
+    missionsRef.current = next;
+    setMissions(next);
   }, []);
 
   const initStars = useCallback((w: number, h: number) => {
@@ -232,7 +270,7 @@ export default function MeteorSplitGame() {
     game.lastEventLevel = game.level;
   }, []);
 
-  const splitMeteor = useCallback((meteor: Meteor) => {
+  const splitMeteor = useCallback((meteor: Meteor, tapX = meteor.x, tapY = meteor.y) => {
     const game = gameRef.current;
     const canvas = canvasRef.current;
     const cfg = diffConfigRef.current;
@@ -241,11 +279,28 @@ export default function MeteorSplitGame() {
 
     // Boss
     if (meteor.isBoss && meteor.bossHp !== undefined) {
-      meteor.bossHp--;
+      const hitAngle = Math.atan2(tapY - meteor.y, tapX - meteor.x);
+      const weakAngle = meteor.bossWeakPointAngle ?? 0;
+      const angleDifference = Math.abs(Math.atan2(Math.sin(hitAngle - weakAngle), Math.cos(hitAngle - weakAngle)));
+      if (angleDifference > 0.48) {
+        addParticles(tapX, tapY, 5, 220, 'debris');
+        game.combo = 0;
+        return;
+      }
+
       meteor.tapCount++;
+      meteor.bossWeakPointAngle = (weakAngle + Math.PI * 0.78) % (Math.PI * 2);
       game.screenShake = Math.min(game.screenShake + 4, 12);
-      addParticles(meteor.x, meteor.y, 10, 300, 'spark');
+      addParticles(tapX, tapY, 12, meteor.bossShield ? 195 : 300, 'spark');
       playBossHit();
+
+      if ((meteor.bossShield ?? 0) > 0) {
+        meteor.bossShield = Math.max(0, (meteor.bossShield ?? 0) - 1);
+        hapticSplit();
+        return;
+      }
+
+      meteor.bossHp--;
 
       if (meteor.bossHp <= 0) {
         meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
@@ -261,6 +316,8 @@ export default function MeteorSplitGame() {
         powerupsRef.current.push({ id: genId(), x: meteor.x, y: meteor.y, vy: 0.2, type, life: 8000, radius: 18, pulse: 0 });
         triggerAchievementCheck();
       } else {
+        // The shield reforms in phases, forcing players to follow the new weak point.
+        if (meteor.bossHp % 3 === 0) meteor.bossShield = meteor.bossMaxShield;
         hapticSplit();
       }
       return;
@@ -283,6 +340,7 @@ export default function MeteorSplitGame() {
       if (game.combo > 2) playCombo(game.combo);
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current, cfg.powerUpDropChance);
       triggerAchievementCheck();
+      updateMissionProgress();
       return;
     }
 
@@ -297,7 +355,8 @@ export default function MeteorSplitGame() {
       meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
       if (meteorsRef.current.length < MAX_METEORS) {
         for (let i = 0; i < count; i++) {
-          const nm = createMeteor(meteor.x + (Math.random() - 0.5) * 30, meteor.y + (Math.random() - 0.5) * 30, meteor.generation + 1, canvas.width, canvas.height, skin);
+          const { width, height } = viewportRef.current;
+          const nm = createMeteor(meteor.x + (Math.random() - 0.5) * 30, meteor.y + (Math.random() - 0.5) * 30, meteor.generation + 1, width, height, skin);
           const a = Math.random() * Math.PI * 2;
           const spd = 1.5 + Math.random() * 2;
           nm.vx = Math.cos(a) * spd * cfg.meteorSpeedMult;
@@ -315,7 +374,8 @@ export default function MeteorSplitGame() {
       hapticSplit();
       for (let i = 0; i < 2; i++) {
         if (meteorsRef.current.length < MAX_METEORS) {
-          const nm = createMeteor(meteor.x + (Math.random() - 0.5) * 20, meteor.y + (Math.random() - 0.5) * 20, meteor.generation + 1, canvas.width, canvas.height, skin);
+          const { width, height } = viewportRef.current;
+          const nm = createMeteor(meteor.x + (Math.random() - 0.5) * 20, meteor.y + (Math.random() - 0.5) * 20, meteor.generation + 1, width, height, skin);
           nm.vx *= cfg.meteorSpeedMult;
           nm.vy *= cfg.meteorSpeedMult;
           meteorsRef.current.push(nm);
@@ -332,14 +392,16 @@ export default function MeteorSplitGame() {
       triggerAchievementCheck();
     }
 
+    updateMissionProgress();
+
     const prevLevel = game.level;
     if (game.meteorsDestroyed > 0 && game.meteorsDestroyed % 15 === 0) {
-      game.level = Math.min(20, game.level + 1);
+      game.level += 1;
     }
 
     const eventStart = dailyModRef.current?.specialStartLevel ?? 3;
     if (game.level > prevLevel && game.level - game.lastEventLevel >= EVENT_INTERVAL_LEVELS && game.level >= eventStart) {
-      triggerSpecialEvent(canvas.width, canvas.height);
+      triggerSpecialEvent(viewportRef.current.width, viewportRef.current.height);
     }
 
     if (game.chaosLevel >= 1) {
@@ -351,6 +413,7 @@ export default function MeteorSplitGame() {
         game.highScore = game.score;
         localStorage.setItem('meteorSplitHigh', String(game.score));
       }
+      if (game.score >= game.highScore && game.score > 0) void sendYouTubeScore(game.score);
       const entry = {
         score: game.score, level: game.level,
         meteorsDestroyed: game.meteorsDestroyed, maxCombo: game.maxCombo,
@@ -359,15 +422,19 @@ export default function MeteorSplitGame() {
       if (gameMode === 'daily') {
         addDailyEntry(entry);
         setDailyLeaderboard(getDailyLeaderboard());
+      } else if (gameMode === 'weekly') {
+        addWeeklyEntry(entry);
+        setWeeklyLeaderboard(getWeeklyLeaderboard());
       } else {
         addLeaderboardEntry(entry);
         setLeaderboard(getLeaderboard());
       }
       refreshUnlocks();
-      addParticles(canvas.width / 2, canvas.height / 2, 50, 0, 'chaos');
+      addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 50, 0, 'chaos');
       setScreen('gameover');
+      void saveYouTubeProgress();
     }
-  }, [triggerSpecialEvent, gameMode, refreshUnlocks]);
+  }, [triggerSpecialEvent, gameMode, refreshUnlocks, updateMissionProgress]);
 
   const collectPowerUp = useCallback((pu: PowerUp) => {
     const game = gameRef.current;
@@ -384,6 +451,31 @@ export default function MeteorSplitGame() {
     triggerAchievementCheck();
   }, [triggerAchievementCheck]);
 
+  const activatePulse = useCallback(() => {
+    const game = gameRef.current;
+    if (!game.started || game.gameOver || isHostPausedRef.current || game.pulseCooldown > 0) return;
+    game.pulseCooldown = PULSE_COOLDOWN;
+    game.chaosLevel = Math.max(0, game.chaosLevel - 0.22);
+    game.screenShake = 14;
+    let cleared = 0;
+    meteorsRef.current = meteorsRef.current.filter(meteor => {
+      if (meteor.isBoss) {
+        if ((meteor.bossShield ?? 0) > 0) meteor.bossShield = Math.max(0, (meteor.bossShield ?? 0) - 1);
+        else if (meteor.bossHp !== undefined) meteor.bossHp = Math.max(1, meteor.bossHp - 1);
+        addParticles(meteor.x, meteor.y, 16, 195, 'spark');
+        return true;
+      }
+      cleared++;
+      addParticles(meteor.x, meteor.y, 10, 190, 'spark');
+      return false;
+    });
+    game.meteorsDestroyed += cleared;
+    game.score += Math.round(cleared * 20 * game.scoreMultiplier * diffConfigRef.current.scoreMultiplier);
+    addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 36, 190, 'spark');
+    hapticPowerUp();
+    updateMissionProgress();
+  }, [updateMissionProgress]);
+
   const startGame = useCallback((mode: GameMode = 'classic') => {
     const game = gameRef.current;
     const cfg = DIFFICULTY_CONFIGS[difficulty];
@@ -394,6 +486,8 @@ export default function MeteorSplitGame() {
     setGameMode(mode);
     if (mode === 'daily') {
       dailyModRef.current = getDailyModifiers();
+    } else if (mode === 'weekly') {
+      dailyModRef.current = getWeeklyModifiers();
     } else {
       dailyModRef.current = null;
     }
@@ -413,12 +507,18 @@ export default function MeteorSplitGame() {
     game.specialEvent = null;
     game.lastEventLevel = 0;
     game.bossDefeated = 0;
+    game.pulseCooldown = 0;
+    game.runTime = 0;
+    game.taps = 0;
+    game.hits = 0;
     meteorsRef.current = [];
     particlesRef.current = [];
     powerupsRef.current = [];
     spawnTimerRef.current = 0;
     showerTimerRef.current = 0;
     powerupsCollectedRef.current = 0;
+    missionsRef.current = createRunMissions();
+    setMissions(missionsRef.current);
     startBGM();
     setScreen('playing');
   }, [difficulty, selectedSkinId, selectedThemeId]);
@@ -427,11 +527,12 @@ export default function MeteorSplitGame() {
     const canvas = canvasRef.current;
     const game = gameRef.current;
     if (!canvas) return;
+    if (isHostPausedRef.current) return;
     resumeAudio();
 
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const scaleX = viewportRef.current.width / rect.width;
+    const scaleY = viewportRef.current.height / rect.height;
     const x = (clientX - rect.left) * scaleX;
     const y = (clientY - rect.top) * scaleY;
 
@@ -453,6 +554,8 @@ export default function MeteorSplitGame() {
       return;
     }
 
+    game.taps++;
+
     for (const pu of powerupsRef.current) {
       const d = Math.hypot(pu.x - x, pu.y - y);
       if (d < pu.radius * 2) { collectPowerUp(pu); return; }
@@ -466,18 +569,83 @@ export default function MeteorSplitGame() {
       if (d < hitRadius && d < closestDist) { closest = m; closestDist = d; }
     }
 
-    if (closest) splitMeteor(closest);
+    if (closest) { game.hits++; splitMeteor(closest, x, y); }
     else game.combo = 0;
   }, [splitMeteor, collectPowerUp, startGame]);
+
+  // Restore cloud progress before declaring the title screen ready to YouTube.
+  useEffect(() => {
+    let mounted = true;
+    const cleanup = initializeYouTubePlayables({
+      onAudioEnabled: setHostAudioEnabled,
+      onPause: () => {
+        isHostPausedRef.current = true;
+        suspendAudio();
+        void saveYouTubeProgress();
+      },
+      onResume: () => {
+        isHostPausedRef.current = false;
+        resumeAudio();
+      },
+      onLanguage: (locale) => { document.documentElement.lang = locale; },
+    });
+
+    void loadYouTubeProgress().then((restored) => {
+      if (!mounted || !restored) { notifyGameReady(); return; }
+      const highScore = parseInt(localStorage.getItem('meteorSplitHigh') || '0', 10) || 0;
+      gameRef.current.highScore = highScore;
+      setUiState(current => ({ ...current, highScore }));
+      setLeaderboard(getLeaderboard());
+      setDailyLeaderboard(getDailyLeaderboard());
+      setWeeklyLeaderboard(getWeeklyLeaderboard());
+      const restoredStats = getStats();
+      setStats(restoredStats);
+      setUnlockStats(getUnlockStats(restoredStats));
+      setSettingsState(getSettings());
+      setSelectedSkinId(getSelectedSkin());
+      setSelectedThemeId(getSelectedTheme());
+      setAllUnlocked(getAllUnlocked());
+      notifyGameReady();
+    });
+
+    return () => { mounted = false; cleanup(); };
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && !event.repeat) {
+        event.preventDefault();
+        activatePulse();
+        return;
+      }
+      if (event.key.toLowerCase() !== 'f' || event.repeat) return;
+      const toggle = document.fullscreenElement
+        ? document.exitFullscreen()
+        : document.documentElement.requestFullscreen();
+      void toggle.catch(() => undefined).finally(() => window.dispatchEvent(new Event('resize')));
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [activatePulse]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      initStars(canvas.width, canvas.height);
+      const width = Math.floor(window.innerWidth);
+      const height = Math.floor(window.innerHeight);
+      // Playables can initially boot in a hidden 0×0 WebView. Keep the game
+      // alive and wait for its real viewport instead of resetting progress.
+      if (width <= 0 || height <= 0) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      viewportRef.current = { width, height, dpr };
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      canvas.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      initStars(width, height);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -496,29 +664,32 @@ export default function MeteorSplitGame() {
     const ctx = canvas.getContext('2d')!;
     let lastTime = performance.now();
 
-    const loop = (now: number) => {
+    const loop = (now: number, scheduleNextFrame = true) => {
       const rawDt = Math.min(now - lastTime, 50);
       lastTime = now;
       const game = gameRef.current;
-      const w = canvas.width;
-      const h = canvas.height;
+      const { width: w, height: h } = viewportRef.current;
       const cfg = diffConfigRef.current;
       const skin = activeSkinRef.current;
       const theme = activeThemeRef.current;
       const dailyMod = dailyModRef.current;
+      const accessibility = getSettings();
+      const reducedMotion = isReducedMotion();
+      const biome = getBiome(game.level);
 
       const timeScale = game.slowmoTimer > 0 ? 0.4 : 1;
       const dt = rawDt * timeScale;
 
-      if (game.started && !game.gameOver) {
+      if (game.started && !game.gameOver && !isHostPausedRef.current) {
         // Spawn
         spawnTimerRef.current -= rawDt;
         if (spawnTimerRef.current <= 0) {
           const spawnMult = dailyMod?.spawnRateMult ?? 1;
-          const interval = Math.max(cfg.spawnIntervalMin, cfg.spawnIntervalBase - game.level * cfg.spawnIntervalPerLevel) / spawnMult;
+          const endlessTier = Math.floor((game.level - 1) / 5);
+          const interval = Math.max(cfg.spawnIntervalMin * Math.max(0.5, 1 - endlessTier * 0.04), cfg.spawnIntervalBase - game.level * cfg.spawnIntervalPerLevel) / spawnMult;
           spawnTimerRef.current = interval;
-          const count = Math.min(3, 1 + Math.floor(game.level / 3));
-          meteorsRef.current.push(...spawnMeteorsAtEdge(count, 0, w, h, skin, cfg.meteorSpeedMult));
+          const count = Math.min(5, 1 + Math.floor(game.level / 3));
+          meteorsRef.current.push(...spawnMeteorsAtEdge(count, 0, w, h, skin, cfg.meteorSpeedMult * (1 + endlessTier * 0.08)));
         }
 
         // Meteor shower
@@ -544,6 +715,8 @@ export default function MeteorSplitGame() {
         if (game.comboTimer > 0) { game.comboTimer -= rawDt; if (game.comboTimer <= 0) game.combo = 0; }
         if (game.slowmoTimer > 0) game.slowmoTimer -= rawDt;
         if (game.scoreMultiTimer > 0) { game.scoreMultiTimer -= rawDt; if (game.scoreMultiTimer <= 0) game.scoreMultiplier = 1; }
+        if (game.pulseCooldown > 0) game.pulseCooldown = Math.max(0, game.pulseCooldown - rawDt);
+        game.runTime += rawDt;
 
         game.chaosLevel = Math.max(0, game.chaosLevel - cfg.chaosDecayRate * dt);
         updateBGMChaos(game.chaosLevel);
@@ -564,6 +737,9 @@ export default function MeteorSplitGame() {
             if (m.y < -m.radius * 2) m.y = h + m.radius;
             if (m.y > h + m.radius * 2) m.y = -m.radius;
           } else {
+            m.bossOrbitPhase = (m.bossOrbitPhase ?? 0) + dt * 0.0015;
+            m.vx += Math.cos(m.bossOrbitPhase) * 0.003;
+            m.vy += Math.sin(m.bossOrbitPhase) * 0.003;
             if (m.x - m.radius < 0 || m.x + m.radius > w) m.vx *= -1;
             if (m.y - m.radius < 0 || m.y + m.radius > h) m.vy *= -1;
             m.x = Math.max(m.radius, Math.min(w - m.radius, m.x));
@@ -592,7 +768,7 @@ export default function MeteorSplitGame() {
       }
 
       // === DRAW ===
-      const shake = game.screenShake;
+      const shake = reducedMotion ? 0 : game.screenShake;
       const sx = shake > 0.5 ? (Math.random() - 0.5) * shake : 0;
       const sy = shake > 0.5 ? (Math.random() - 0.5) * shake : 0;
       ctx.save();
@@ -604,6 +780,8 @@ export default function MeteorSplitGame() {
       grad.addColorStop(0.5, `hsl(${theme.bgGradient[1]})`);
       grad.addColorStop(1, `hsl(${theme.bgGradient[2]})`);
       ctx.fillStyle = grad;
+      ctx.fillRect(-10, -10, w + 20, h + 20);
+      ctx.fillStyle = `hsla(${biome.hue}, 75%, 35%, 0.16)`;
       ctx.fillRect(-10, -10, w + 20, h + 20);
 
       if (game.chaosLevel > 0.3) {
@@ -634,7 +812,7 @@ export default function MeteorSplitGame() {
           ctx.beginPath();
           ctx.moveTo(m.trail[0].x, m.trail[0].y);
           for (let i = 1; i < m.trail.length; i++) ctx.lineTo(m.trail[i].x, m.trail[i].y);
-          const trailHue = m.isBoss ? 300 : m.hue;
+          const trailHue = mapHue(m.isBoss ? 300 : m.hue, accessibility.colorBlindMode);
           ctx.strokeStyle = `hsla(${trailHue}, 80%, 60%, ${m.isBoss ? 0.3 : 0.15})`;
           ctx.lineWidth = m.radius * (m.isBoss ? 0.7 : skin.trailWidth);
           ctx.lineCap = 'round';
@@ -649,7 +827,7 @@ export default function MeteorSplitGame() {
         ctx.rotate(m.rotation);
 
         if (m.isBoss) {
-          const bPulse = 1 + Math.sin(now * 0.004) * 0.15;
+          const bPulse = reducedMotion ? 1 : 1 + Math.sin(now * 0.004) * 0.15;
           const glowGrad = ctx.createRadialGradient(0, 0, m.radius * 0.2, 0, 0, m.radius * 3 * bPulse);
           glowGrad.addColorStop(0, `hsla(300, 90%, 60%, 0.5)`);
           glowGrad.addColorStop(0.5, `hsla(280, 80%, 40%, 0.2)`);
@@ -679,9 +857,41 @@ export default function MeteorSplitGame() {
           ctx.arc(0, 0, m.radius * 0.2, 0, Math.PI * 2);
           ctx.fillStyle = `hsla(350, 100%, 60%, ${0.7 + Math.sin(now * 0.006) * 0.3})`;
           ctx.fill();
+
+          const weakPointAngle = m.bossWeakPointAngle ?? 0;
+          const weakX = Math.cos(weakPointAngle) * m.radius * 0.72;
+          const weakY = Math.sin(weakPointAngle) * m.radius * 0.72;
+          ctx.beginPath();
+          ctx.arc(weakX, weakY, m.radius * 0.16, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(55, 100%, 65%, ${reducedMotion ? 1 : 0.7 + Math.sin(now * 0.009) * 0.3})`;
+          ctx.fill();
+          ctx.strokeStyle = 'hsla(55, 100%, 88%, 0.95)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+
+          if ((m.bossShield ?? 0) > 0) {
+            ctx.beginPath();
+            ctx.arc(0, 0, m.radius * 1.18, 0, Math.PI * 2);
+            ctx.strokeStyle = 'hsla(195, 95%, 68%, 0.68)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+          }
+          const orbiters = m.bossOrbiters ?? 0;
+          for (let i = 0; i < orbiters; i++) {
+            const angle = (m.bossOrbitPhase ?? 0) + (i / orbiters) * Math.PI * 2;
+            const distance = m.radius * 1.58;
+            ctx.beginPath();
+            ctx.arc(Math.cos(angle) * distance, Math.sin(angle) * distance, m.radius * 0.12, 0, Math.PI * 2);
+            ctx.fillStyle = 'hsl(210, 80%, 58%)';
+            ctx.fill();
+            ctx.strokeStyle = 'hsla(210, 90%, 82%, 0.75)';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
         } else {
           const glowGrad = ctx.createRadialGradient(0, 0, m.radius * 0.2, 0, 0, m.radius * 2);
-          glowGrad.addColorStop(0, `hsla(${m.hue}, 80%, 60%, ${skin.glowIntensity})`);
+          const meteorHue = mapHue(m.hue, accessibility.colorBlindMode);
+          glowGrad.addColorStop(0, `hsla(${meteorHue}, 80%, 60%, ${skin.glowIntensity})`);
           glowGrad.addColorStop(1, 'transparent');
           ctx.fillStyle = glowGrad;
           ctx.fillRect(-m.radius * 2, -m.radius * 2, m.radius * 4, m.radius * 4);
@@ -695,12 +905,12 @@ export default function MeteorSplitGame() {
           }
           ctx.closePath();
           const bodyGrad = ctx.createRadialGradient(-m.radius * 0.3, -m.radius * 0.3, 0, 0, 0, m.radius);
-          bodyGrad.addColorStop(0, `hsl(${m.hue}, 60%, 50%)`);
-          bodyGrad.addColorStop(0.6, `hsl(${m.hue}, 50%, 30%)`);
-          bodyGrad.addColorStop(1, `hsl(${m.hue}, 40%, 15%)`);
+          bodyGrad.addColorStop(0, `hsl(${meteorHue}, 60%, 50%)`);
+          bodyGrad.addColorStop(0.6, `hsl(${meteorHue}, 50%, 30%)`);
+          bodyGrad.addColorStop(1, `hsl(${meteorHue}, 40%, 15%)`);
           ctx.fillStyle = bodyGrad;
           ctx.fill();
-          ctx.strokeStyle = `hsla(${m.hue}, 70%, 65%, 0.6)`;
+          ctx.strokeStyle = `hsla(${meteorHue}, 70%, 65%, 0.6)`;
           ctx.lineWidth = 1.5;
           ctx.stroke();
 
@@ -709,7 +919,7 @@ export default function MeteorSplitGame() {
             const cy2 = Math.cos(i * 3.7 + m.id.charCodeAt(1)) * m.radius * 0.4;
             ctx.beginPath();
             ctx.arc(cx2, cy2, m.radius * 0.12, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(${m.hue}, 30%, 20%, 0.5)`;
+            ctx.fillStyle = `hsla(${meteorHue}, 30%, 20%, 0.5)`;
             ctx.fill();
           }
         }
@@ -765,27 +975,56 @@ export default function MeteorSplitGame() {
       ctx.restore();
 
       // Boss HP
-      let bossHpPct = 0, showBossHp = false;
+      let bossHpPct = 0, bossShieldPct = 0, showBossHp = false;
       if (game.specialEvent?.type === 'boss_meteor') {
         const boss = meteorsRef.current.find(m => m.isBoss);
         if (boss?.bossHp !== undefined && boss.bossMaxHp) {
           bossHpPct = boss.bossHp / boss.bossMaxHp;
+          bossShieldPct = boss.bossMaxShield ? (boss.bossShield ?? 0) / boss.bossMaxShield : 0;
           showBossHp = true;
         }
       }
 
       let eventText = '';
       if (game.specialEvent?.type === 'meteor_shower' && game.specialEvent.active) eventText = '☄️ METEOR SHOWER!';
-      else if (game.specialEvent?.type === 'boss_meteor' && game.specialEvent.active) eventText = '👾 BOSS METEOR!';
+      else if (game.specialEvent?.type === 'boss_meteor' && game.specialEvent.active) eventText = bossShieldPct > 0 ? '👾 BOSS: BREAK THE SHIELD' : '👾 BOSS: HIT THE GOLD WEAK POINT';
 
       setUiState({
         score: game.score, level: game.level, chaos: game.chaosLevel,
         highScore: game.highScore, combo: game.combo,
         slowmo: game.slowmoTimer > 0, scoreMult: game.scoreMultiTimer > 0,
-        scoreMultiplier: game.scoreMultiplier, eventText, bossHpPct, showBossHp,
+        scoreMultiplier: game.scoreMultiplier, eventText, bossHpPct, bossShieldPct, showBossHp,
+        pulseCooldown: game.pulseCooldown, biome: biome.name,
       });
 
-      animRef.current = requestAnimationFrame(loop);
+      notifyFirstFrameReady();
+      if (scheduleNextFrame) animRef.current = requestAnimationFrame(loop);
+    };
+
+    window.render_game_to_text = () => {
+      const game = gameRef.current;
+      return JSON.stringify({
+        coordinateSystem: 'canvas origin is top-left; x increases right, y increases down',
+        screen: screenRef.current,
+        paused: isHostPausedRef.current,
+        score: game.score,
+        level: game.level,
+        biome: getBiome(game.level).name,
+        chaos: game.chaosLevel,
+        combo: game.combo,
+        pulseCooldown: game.pulseCooldown,
+        missions: missionsRef.current.map(({ id, progress, target, complete }) => ({ id, progress, target, complete })),
+        meteors: meteorsRef.current.map(({ x, y, radius, generation, isBoss, bossHp, bossShield }) => ({ x, y, radius, generation, isBoss, bossHp, bossShield })),
+        powerups: powerupsRef.current.map(({ x, y, type, life }) => ({ x, y, type, life })),
+      });
+    };
+    window.advanceTime = (milliseconds: number) => {
+      let remaining = Math.max(0, milliseconds);
+      while (remaining > 0) {
+        const step = Math.min(50, remaining);
+        loop(lastTime + step, false);
+        remaining -= step;
+      }
     };
 
     animRef.current = requestAnimationFrame(loop);
@@ -794,6 +1033,8 @@ export default function MeteorSplitGame() {
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('touchstart', onTouch);
       canvas.removeEventListener('mousedown', onClick);
+      delete window.render_game_to_text;
+      delete window.advanceTime;
       stopBGM();
     };
   }, [handleTap, initStars]);
@@ -804,9 +1045,10 @@ export default function MeteorSplitGame() {
   const btnSecondary = { backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))' };
 
   const dailyMod = getDailyModifiers();
+  const weeklyMod = getWeeklyModifiers();
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-background">
+    <div className="fixed inset-0 overflow-hidden bg-background" style={{ filter: settingsState.highContrast ? 'contrast(1.18) saturate(1.08)' : undefined }}>
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
       {/* HUD */}
@@ -817,7 +1059,7 @@ export default function MeteorSplitGame() {
               {uiState.score.toLocaleString()}
             </div>
             <div className="font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>
-              Level {uiState.level} {gameMode === 'daily' && '• DAILY'}
+              Level {uiState.level} • {uiState.biome} {gameMode === 'daily' && '• DAILY'} {gameMode === 'weekly' && '• WEEKLY'}
             </div>
             {uiState.scoreMult && (
               <div className="font-display text-xs font-bold" style={{ color: 'hsl(var(--score-gold))' }}>
@@ -846,6 +1088,27 @@ export default function MeteorSplitGame() {
         </div>
       )}
 
+      {screen === 'playing' && (
+        <>
+          <div className="absolute bottom-5 left-4 z-10 pointer-events-none space-y-1">
+            {missions.map(mission => (
+              <div key={mission.id} className="font-body text-[10px] rounded-full px-2 py-1" style={{
+                backgroundColor: 'hsl(var(--card) / 0.76)',
+                color: mission.complete ? 'hsl(var(--score-gold))' : 'hsl(var(--muted-foreground))',
+              }}>{mission.complete ? '✓' : mission.icon} {mission.progress.toLocaleString()}/{mission.target.toLocaleString()} {mission.title}</div>
+            ))}
+          </div>
+          <button aria-label="Activate Nova Pulse" className="absolute bottom-5 right-4 z-20 w-16 h-16 rounded-full font-display text-[10px] font-bold pointer-events-auto transition-all" style={{
+            backgroundColor: uiState.pulseCooldown <= 0 ? 'hsl(190, 85%, 45% / 0.92)' : 'hsl(var(--muted) / 0.88)',
+            color: 'hsl(var(--foreground))',
+            border: `2px solid ${uiState.pulseCooldown <= 0 ? 'hsl(190, 95%, 75%)' : 'hsl(var(--border))'}`,
+            boxShadow: uiState.pulseCooldown <= 0 ? '0 0 18px hsl(190, 90%, 60% / 0.65)' : 'none',
+          }} onClick={(event) => { event.stopPropagation(); activatePulse(); }}>
+            {uiState.pulseCooldown <= 0 ? 'NOVA\nPULSE' : `${Math.ceil(uiState.pulseCooldown / 1000)}s`}
+          </button>
+        </>
+      )}
+
       {/* Event Banner */}
       {screen === 'playing' && uiState.eventText && (
         <div className="absolute top-14 left-0 right-0 flex justify-center pointer-events-none z-10">
@@ -860,6 +1123,14 @@ export default function MeteorSplitGame() {
       {/* Boss HP */}
       {screen === 'playing' && uiState.showBossHp && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 pointer-events-none z-10 flex flex-col items-center gap-1">
+          {uiState.bossShieldPct > 0 && (
+            <>
+              <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(195, 90%, 75%)' }}>Shield • target the gold weak point</div>
+              <div className="w-40 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+                <div className="h-full rounded-full transition-all duration-300" style={{ width: `${uiState.bossShieldPct * 100}%`, background: 'hsl(195, 90%, 58%)' }} />
+              </div>
+            </>
+          )}
           <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(300, 70%, 75%)' }}>BOSS HP</div>
           <div className="w-40 h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
             <div className="h-full rounded-full transition-all duration-300" style={{
@@ -934,6 +1205,8 @@ export default function MeteorSplitGame() {
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); setScreen('daily'); }}>📅 DAILY</button>
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
+              onClick={(e) => { e.stopPropagation(); setScreen('weekly'); }}>🛰 WEEKLY</button>
+            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); setScreen('leaderboard'); }}>🏆 SCORES</button>
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); refreshUnlocks(); setScreen('skins'); }}>🎨 SKINS</button>
@@ -951,11 +1224,26 @@ export default function MeteorSplitGame() {
           <div className="px-8 py-10 rounded-2xl text-center" style={{ ...panelStyle, backgroundColor: 'hsl(var(--card) / 0.9)' }}>
             <h2 className="font-display text-4xl font-black mb-2" style={{ color: 'hsl(var(--accent))' }}>CHAOS OVERLOAD</h2>
             {gameMode === 'daily' && <div className="font-display text-xs mb-2" style={{ color: 'hsl(var(--secondary))' }}>📅 DAILY CHALLENGE</div>}
+            {gameMode === 'weekly' && <div className="font-display text-xs mb-2" style={{ color: 'hsl(var(--secondary))' }}>🛰 WEEKLY GAUNTLET</div>}
             <div className="font-display text-5xl font-bold text-glow my-4" style={{ color: 'hsl(var(--primary))' }}>{uiState.score.toLocaleString()}</div>
             <p className="font-body text-sm mb-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
               Level {uiState.level} • {gameRef.current.maxCombo > 0 ? `Best combo: ${gameRef.current.maxCombo}x` : ''}
               {gameRef.current.bossDefeated > 0 ? ` • Bosses: ${gameRef.current.bossDefeated}` : ''}
             </p>
+            <div className="grid grid-cols-2 gap-2 mt-4 text-left">
+              <div className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+                <div className="font-display text-sm" style={{ color: 'hsl(var(--secondary))' }}>{gameRef.current.taps ? Math.round((gameRef.current.hits / gameRef.current.taps) * 100) : 0}%</div>
+                <div className="font-body text-[10px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Tap accuracy</div>
+              </div>
+              <div className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+                <div className="font-display text-sm" style={{ color: 'hsl(var(--secondary))' }}>{gameRef.current.meteorsDestroyed}</div>
+                <div className="font-body text-[10px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Fragments split</div>
+              </div>
+            </div>
+            <div className="mt-4 text-left space-y-1">
+              <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Run missions</div>
+              {missions.map(mission => <div key={mission.id} className="font-body text-[11px]" style={{ color: mission.complete ? 'hsl(var(--score-gold))' : 'hsl(var(--muted-foreground))' }}>{mission.complete ? '✓' : '○'} {mission.title}: {mission.progress.toLocaleString()}/{mission.target.toLocaleString()}</div>)}
+            </div>
             {uiState.score >= uiState.highScore && uiState.score > 0 && (
               <p className="font-display text-sm mt-2" style={{ color: 'hsl(var(--score-gold))' }}>★ NEW HIGH SCORE ★</p>
             )}
@@ -1005,6 +1293,43 @@ export default function MeteorSplitGame() {
             </button>
             <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnSecondary}
               onClick={() => setScreen('title')}>BACK</button>
+          </div>
+        </div>
+      )}
+
+      {/* Weekly Challenge Screen */}
+      {screen === 'weekly' && (
+        <div className="absolute inset-0 flex flex-col items-center z-20 overflow-auto py-8 px-4">
+          <div className="w-full max-w-md rounded-2xl p-6" style={panelStyle}>
+            <h2 className="font-display text-2xl font-bold mb-1 text-center" style={{ color: 'hsl(var(--secondary))' }}>🛰 WEEKLY GAUNTLET</h2>
+            <p className="font-body text-xs text-center mb-4" style={{ color: 'hsl(var(--muted-foreground))' }}>Week of {getWeekKey()} • Seed {weeklyMod.seed}</p>
+            <div className="rounded-xl p-4 mb-4" style={{ backgroundColor: 'hsl(var(--muted) / 0.4)' }}>
+              <div className="font-display text-sm font-bold mb-1" style={{ color: 'hsl(var(--score-gold))' }}>{weeklyMod.name}</div>
+              <p className="font-body text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>{weeklyMod.description}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mb-4 text-center">
+              <div className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--score-gold))' }}>{getWeeklyBestScore().toLocaleString()}</div>
+                <div className="font-body text-[10px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Best This Week</div>
+              </div>
+              <div className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--secondary))' }}>{getWeeklyAttempts()}</div>
+                <div className="font-body text-[10px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Attempts</div>
+              </div>
+            </div>
+            <div className="space-y-1 mb-4">
+              <div className="font-display text-xs uppercase tracking-widest mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Weekly Scores</div>
+              {weeklyLeaderboard.length === 0 ? (
+                <p className="font-body text-xs" style={{ color: 'hsl(var(--muted-foreground))' }}>Set the first score for this week.</p>
+              ) : weeklyLeaderboard.slice(0, 5).map((entry, index) => (
+                <div key={`${entry.date}-${index}`} className="flex justify-between rounded-lg px-3 py-1.5" style={{ backgroundColor: index === 0 ? 'hsl(var(--muted) / 0.6)' : 'transparent' }}>
+                  <span className="font-display text-sm" style={{ color: index === 0 ? 'hsl(var(--score-gold))' : 'hsl(var(--foreground))' }}>{entry.score.toLocaleString()}</span>
+                  <span className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Lv{entry.level}</span>
+                </div>
+              ))}
+            </div>
+            <button className="w-full font-display text-sm px-6 py-3 rounded-lg mb-3" style={btnPrimary} onClick={() => startGame('weekly')}>ENTER WEEKLY GAUNTLET</button>
+            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnSecondary} onClick={() => setScreen('title')}>BACK</button>
           </div>
         </div>
       )}
@@ -1126,6 +1451,21 @@ export default function MeteorSplitGame() {
         <div className="absolute inset-0 flex flex-col items-center z-20 overflow-auto py-8 px-4">
           <div className="w-full max-w-md rounded-2xl p-6" style={panelStyle}>
             <h2 className="font-display text-2xl font-bold mb-6 text-center" style={{ color: 'hsl(var(--primary))' }}>⚙ SETTINGS</h2>
+
+            <div className="mb-6">
+              <div className="font-display text-xs uppercase tracking-widest mb-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Accessibility presets</div>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: 'standard', label: 'Standard', settings: { reducedMotion: false, highContrast: false, colorBlindMode: 'off' as const, uiScale: 1 } },
+                  { id: 'focus', label: 'Focus', settings: { reducedMotion: false, highContrast: true, colorBlindMode: 'deuteranopia' as const, uiScale: 1.2 } },
+                  { id: 'calm', label: 'Calm', settings: { reducedMotion: true, highContrast: true, colorBlindMode: 'off' as const, uiScale: 1.1 } },
+                ].map(preset => {
+                  const active = settingsState.reducedMotion === preset.settings.reducedMotion && settingsState.highContrast === preset.settings.highContrast && settingsState.colorBlindMode === preset.settings.colorBlindMode && settingsState.uiScale === preset.settings.uiScale;
+                  return <button key={preset.id} className="rounded-lg px-2 py-2 font-display text-[10px]" style={{ backgroundColor: active ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--muted) / 0.45)', color: active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))', border: `1px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}` }} onClick={() => { setSettings(preset.settings); applyUiScale(preset.settings.uiScale); setSettingsState(getSettings()); }}>{preset.label}</button>;
+                })}
+              </div>
+              <p className="font-body text-[10px] mt-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Focus enlarges UI and boosts contrast. Calm reduces flashing and motion.</p>
+            </div>
 
             <div className="mb-6">
               <div className="flex justify-between mb-2">

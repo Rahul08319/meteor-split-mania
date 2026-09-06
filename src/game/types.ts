@@ -16,6 +16,11 @@ export interface Meteor {
   isBoss?: boolean;
   bossHp?: number;
   bossMaxHp?: number;
+  bossShield?: number;
+  bossMaxShield?: number;
+  bossWeakPointAngle?: number;
+  bossOrbitPhase?: number;
+  bossOrbiters?: number;
 }
 
 export interface Particle {
@@ -88,4 +93,8 @@ export interface GameState {
   specialEvent: SpecialEvent | null;
   lastEventLevel: number;
   bossDefeated: number;
+  pulseCooldown: number;
+  runTime: number;
+  taps: number;
+  hits: number;
 }

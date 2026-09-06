@@ -4,6 +4,19 @@ import { getSettings } from './settings';
 let audioCtx: AudioContext | null = null;
 let sfxBus: GainNode | null = null;
 let musicBus: GainNode | null = null;
+let hostAudioEnabled = true;
+
+/** Applies the YouTube host's audio preference without changing player volume settings. */
+export const setHostAudioEnabled = (enabled: boolean) => {
+  hostAudioEnabled = enabled;
+  if (!audioCtx) return;
+  if (enabled) void audioCtx.resume().catch(() => undefined);
+  else void audioCtx.suspend().catch(() => undefined);
+};
+
+export const suspendAudio = () => {
+  if (audioCtx) void audioCtx.suspend().catch(() => undefined);
+};
 
 const getCtx = (): AudioContext => {
   if (!audioCtx) audioCtx = new AudioContext();
@@ -38,7 +51,7 @@ export const setMusicVolume = (v: number) => {
 };
 
 export const resumeAudio = () => {
-  if (audioCtx?.state === 'suspended') audioCtx.resume();
+  if (hostAudioEnabled && audioCtx?.state === 'suspended') void audioCtx.resume();
 };
 
 export const playSplit = (generation: number) => {
