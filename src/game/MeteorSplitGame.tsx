@@ -154,6 +154,7 @@ export default function MeteorSplitGame() {
   const spawnTimerRef = useRef(0);
   const showerTimerRef = useRef(0);
   const animRef = useRef(0);
+  const resumeAnimationRef = useRef<() => void>(() => undefined);
   const isHostPausedRef = useRef(false);
   const viewportRef = useRef({ width: 1, height: 1, dpr: 1 });
 
@@ -397,6 +398,7 @@ export default function MeteorSplitGame() {
     const prevLevel = game.level;
     if (game.meteorsDestroyed > 0 && game.meteorsDestroyed % 15 === 0) {
       game.level += 1;
+      void saveYouTubeProgress();
     }
 
     const eventStart = dailyModRef.current?.specialStartLevel ?? 3;
@@ -580,12 +582,14 @@ export default function MeteorSplitGame() {
       onAudioEnabled: setHostAudioEnabled,
       onPause: () => {
         isHostPausedRef.current = true;
+        cancelAnimationFrame(animRef.current);
         suspendAudio();
         void saveYouTubeProgress();
       },
       onResume: () => {
         isHostPausedRef.current = false;
         resumeAudio();
+        resumeAnimationRef.current();
       },
       onLanguage: (locale) => { document.documentElement.lang = locale; },
     });
@@ -665,6 +669,9 @@ export default function MeteorSplitGame() {
     let lastTime = performance.now();
 
     const loop = (now: number, scheduleNextFrame = true) => {
+      // YouTube's pause callback stops all game work, including painting and
+      // particle updates. onResume explicitly schedules the next frame.
+      if (isHostPausedRef.current) return;
       const rawDt = Math.min(now - lastTime, 50);
       lastTime = now;
       const game = gameRef.current;
@@ -1027,6 +1034,12 @@ export default function MeteorSplitGame() {
       }
     };
 
+    resumeAnimationRef.current = () => {
+      if (isHostPausedRef.current) return;
+      lastTime = performance.now();
+      cancelAnimationFrame(animRef.current);
+      animRef.current = requestAnimationFrame(loop);
+    };
     animRef.current = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(animRef.current);
@@ -1035,6 +1048,7 @@ export default function MeteorSplitGame() {
       canvas.removeEventListener('mousedown', onClick);
       delete window.render_game_to_text;
       delete window.advanceTime;
+      resumeAnimationRef.current = () => undefined;
       stopBGM();
     };
   }, [handleTap, initStars]);

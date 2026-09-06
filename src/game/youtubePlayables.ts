@@ -36,6 +36,7 @@ const MAX_SAVE_BYTES = 3 * 1024 * 1024;
 let firstFrameReported = false;
 let gameReadyReported = false;
 let gameReadyQueued = false;
+let cloudLoadCompleted = false;
 
 const sdk = () => window.ytgame;
 export const isYouTubePlayables = () => Boolean(sdk()?.IN_PLAYABLES_ENV);
@@ -63,7 +64,9 @@ const collectLocalProgress = () => {
 
 /** Saves all existing Meteor Split progress keys in one YouTube cloud-save. */
 export const saveYouTubeProgress = async () => {
-  if (!isYouTubePlayables()) return;
+  // YouTube rejects saves that race loadData; never risk overwriting an
+  // existing cloud save before its load has completed.
+  if (!isYouTubePlayables() || !cloudLoadCompleted) return;
   const data = JSON.stringify({ version: SAVE_VERSION, storage: collectLocalProgress() });
   // The Playables limit is 3 MiB and saveData accepts UTF-16 strings.
   if (!isWellFormed(data) || data.length * 2 >= MAX_SAVE_BYTES) { logHealth('warning'); return; }
@@ -79,7 +82,7 @@ export const loadYouTubeProgress = async () => {
   if (!isYouTubePlayables()) return false;
   try {
     const data = await sdk()!.game.loadData();
-    if (!data) return false;
+    if (!data) { cloudLoadCompleted = true; return false; }
     const parsed: unknown = JSON.parse(data);
     if (!parsed || typeof parsed !== 'object') throw new Error('Invalid Playables save');
     const storage = (parsed as { storage?: unknown }).storage;
@@ -87,6 +90,7 @@ export const loadYouTubeProgress = async () => {
     Object.entries(storage).forEach(([key, value]) => {
       if (key.startsWith(STORAGE_PREFIX) && typeof value === 'string') localStorage.setItem(key, value);
     });
+    cloudLoadCompleted = true;
     return true;
   } catch {
     logHealth('warning');
