@@ -7,6 +7,7 @@ Original prompt: Add all applicable YouTube Playables SDK requirements to https:
 - Added accessibility presets (Focus and Calm) plus a run recap with accuracy, fragments, and mission progress.
 - Hardened the Playables lifecycle: cloud saves wait for `loadData`, pauses cancel animation/rendering, and Page Visibility is not used for Playables pause handling.
 - Added SDK/missions unit coverage and a GitHub Actions workflow that runs `npm ci`, build, and tests on every push.
+- Replaced the starter README with a project-specific guide and refreshed the title screen with an orbital arcade visual system, responsive glass panel, and updated sharing metadata.
 
 ## TODO
 - Install locked dependencies and run the production build plus Playwright game loop. `npm run build` is currently blocked because `node_modules` is absent; the environment denied dependency downloads.

@@ -1185,12 +1185,16 @@ export default function MeteorSplitGame() {
 
       {/* Title Screen */}
       {screen === 'title' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-4">
-          <h1 className="font-display text-5xl md:text-7xl font-black text-glow mb-2" style={{ color: 'hsl(var(--primary))' }}>METEOR</h1>
-          <h2 className="font-display text-3xl md:text-5xl font-bold text-glow-blue mb-4" style={{ color: 'hsl(var(--secondary))' }}>SPLIT</h2>
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-4 title-screen">
+          <div className="title-orbit title-orbit-one" aria-hidden="true" />
+          <div className="title-orbit title-orbit-two" aria-hidden="true" />
+          <div className="title-card">
+          <div className="title-kicker">ORBITAL ARCADE // 01</div>
+          <h1 className="font-display text-5xl md:text-7xl font-black text-glow mb-1 tracking-tight" style={{ color: 'hsl(var(--primary))' }}>METEOR</h1>
+          <h2 className="font-display text-3xl md:text-5xl font-bold text-glow-blue mb-5 tracking-[0.18em]" style={{ color: 'hsl(var(--secondary))' }}>SPLIT</h2>
 
           {/* Difficulty selector */}
-          <div className="flex gap-2 mb-6">
+          <div className="flex gap-2 mb-5 justify-center">
             {(['easy', 'normal', 'hard'] as Difficulty[]).map(d => {
               const cfg = DIFFICULTY_CONFIGS[d];
               const active = difficulty === d;
@@ -1207,15 +1211,15 @@ export default function MeteorSplitGame() {
             })}
           </div>
 
-          <p className="font-body text-xs mb-6" style={{ color: 'hsl(var(--accent))' }}>⚠ Over-tapping creates chaos!</p>
+          <p className="font-body text-xs mb-5 tracking-wide" style={{ color: 'hsl(var(--accent))' }}>⚠ PRECISION OVER PANIC — OVER-TAPPING CREATES CHAOS</p>
 
-          <div className="font-display text-lg animate-pulse cursor-pointer mb-2" style={{ color: 'hsl(var(--foreground))' }}>TAP TO START</div>
+          <div className="title-start font-display text-lg animate-pulse cursor-pointer mb-2" style={{ color: 'hsl(var(--foreground))' }}>TAP TO START</div>
 
           {uiState.highScore > 0 && (
             <div className="font-body text-sm mb-4" style={{ color: 'hsl(var(--score-gold))' }}>Best: {uiState.highScore.toLocaleString()}</div>
           )}
 
-          <div className="flex flex-wrap gap-2 justify-center mt-2">
+          <div className="flex flex-wrap gap-2 justify-center mt-3">
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); setScreen('daily'); }}>📅 DAILY</button>
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
@@ -1228,6 +1232,8 @@ export default function MeteorSplitGame() {
               onClick={(e) => { e.stopPropagation(); setTutorialStep(0); setScreen('tutorial'); }}>❓ HOW TO</button>
             <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
               onClick={(e) => { e.stopPropagation(); setSettingsState(getSettings()); setScreen('settings'); }}>⚙ SETTINGS</button>
+          </div>
+          <div className="title-footer">TAP METEORS TO SPLIT • BUILD COMBOS • SURVIVE THE FIELD</div>
           </div>
         </div>
       )}
