@@ -41,6 +41,28 @@ export const resumeAudio = () => {
   if (audioCtx?.state === 'suspended') audioCtx.resume();
 };
 
+/** Host webview asked us to stop making sound (backgrounded, call, ad). */
+export const suspendAudio = () => {
+  if (audioCtx?.state === 'running') void audioCtx.suspend();
+};
+
+/**
+ * Hosts can mute/unmute the game. Muting drops both buses to zero; unmuting
+ * restores the player's saved volumes and resumes the context.
+ */
+export const setHostAudioEnabled = (enabled: boolean) => {
+  if (!audioCtx) {
+    if (enabled) resumeAudio();
+    return;
+  }
+  const t = audioCtx.currentTime;
+  const s = getSettings();
+  if (sfxBus) sfxBus.gain.setValueAtTime(enabled ? s.sfxVolume : 0, t);
+  if (musicBus) musicBus.gain.setValueAtTime(enabled ? s.musicVolume : 0, t);
+  if (enabled) resumeAudio();
+  else suspendAudio();
+};
+
 export const playSplit = (generation: number) => {
   const ctx = getCtx();
   const osc = ctx.createOscillator();

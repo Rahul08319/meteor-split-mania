@@ -7,6 +7,7 @@ export interface AudioSettings {
   musicVolume: number;
   hapticsEnabled: boolean;
   reducedMotion: boolean;
+  highContrast: boolean;
   colorBlindMode: ColorBlindMode;
   uiScale: number; // 1 = default, up to 1.5
 }
@@ -16,6 +17,7 @@ const DEFAULT: AudioSettings = {
   musicVolume: 0.6,
   hapticsEnabled: true,
   reducedMotion: false,
+  highContrast: false,
   colorBlindMode: 'off',
   uiScale: 1,
 };
