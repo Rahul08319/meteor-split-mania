@@ -72,7 +72,7 @@ export interface SpecialEvent {
   timer: number;
   duration: number;
   active: boolean;
-  data?: any;
+  data?: { bossId?: string } & Record<string, unknown>;
 }
 
 export interface GameState {

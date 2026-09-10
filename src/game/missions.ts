@@ -1,25 +1,46 @@
-export type MissionKind = 'destroyed' | 'combo' | 'score';
+export type MissionMetric = 'destroyed' | 'combo' | 'score';
 
 export interface RunMission {
-  id: MissionKind;
-  icon: string;
+  id: string;
   title: string;
+  icon: string;
+  metric: MissionMetric;
   target: number;
   progress: number;
   complete: boolean;
 }
 
-const TEMPLATES: Array<Omit<RunMission, 'progress' | 'complete'>> = [
-  { id: 'destroyed', icon: '☄️', title: 'Destroy 50 fragments', target: 50 },
-  { id: 'combo', icon: '⚡', title: 'Reach a 10x combo', target: 10 },
-  { id: 'score', icon: '⭐', title: 'Earn 5,000 points', target: 5000 },
+interface MissionTemplate {
+  id: string;
+  title: string;
+  icon: string;
+  metric: MissionMetric;
+  targets: number[];
+}
+
+const TEMPLATES: MissionTemplate[] = [
+  { id: 'split', title: 'fragments split', icon: '☄️', metric: 'destroyed', targets: [25, 40, 60] },
+  { id: 'combo', title: 'combo streak', icon: '🔥', metric: 'combo', targets: [8, 12, 18] },
+  { id: 'score', title: 'points scored', icon: '⭐', metric: 'score', targets: [3000, 6000, 10000] },
 ];
 
-export const createRunMissions = (): RunMission[] => TEMPLATES.map(mission => ({ ...mission, progress: 0, complete: false }));
+/** Three fresh objectives per run, one per metric, with a randomised tier. */
+export const createRunMissions = (): RunMission[] =>
+  TEMPLATES.map(t => ({
+    id: t.id,
+    title: t.title,
+    icon: t.icon,
+    metric: t.metric,
+    target: t.targets[Math.floor(Math.random() * t.targets.length)],
+    progress: 0,
+    complete: false,
+  }));
 
-export const updateRunMissions = (missions: RunMission[], stats: { destroyed: number; combo: number; score: number }) =>
-  missions.map(mission => {
-    const progress = mission.id === 'destroyed' ? stats.destroyed : mission.id === 'combo' ? stats.combo : stats.score;
-    const next = Math.min(mission.target, Math.max(mission.progress, progress));
-    return { ...mission, progress: next, complete: next >= mission.target };
+export const updateRunMissions = (
+  missions: RunMission[],
+  values: { destroyed: number; combo: number; score: number },
+): RunMission[] =>
+  missions.map(m => {
+    const progress = Math.min(m.target, Math.round(values[m.metric] ?? 0));
+    return { ...m, progress, complete: progress >= m.target };
   });

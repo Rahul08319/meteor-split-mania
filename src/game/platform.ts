@@ -20,8 +20,7 @@ export const isInstantGame = platform === 'samsung_instant';
 /**
  * Instant Games webviews start with audio locked and can suspend the page when
  * the host UI takes focus. Call once at boot: unlocks audio on the first
- * gesture. YouTube Playables pause/resume is handled only through the
- * Playables SDK, never through Page Visibility.
+ * gesture and reports visibility changes so music/SFX can be paused.
  */
 export const initPlatformLifecycle = (opts: {
   onUnlockAudio: () => void;
@@ -38,7 +37,11 @@ export const initPlatformLifecycle = (opts: {
   window.addEventListener('touchstart', unlock, { once: false });
   window.addEventListener('keydown', unlock, { once: false });
 
+  const onVis = () => (document.hidden ? opts.onPause() : opts.onResume());
+  document.addEventListener('visibilitychange', onVis);
+
   return () => {
+    document.removeEventListener('visibilitychange', onVis);
     window.removeEventListener('pointerdown', unlock);
     window.removeEventListener('touchstart', unlock);
     window.removeEventListener('keydown', unlock);

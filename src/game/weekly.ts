@@ -1,18 +1,61 @@
 import { LeaderboardEntry } from './types';
-import { SeededRNG } from './daily';
+import { SeededRNG, DailyModifiers } from './daily';
 
-const WEEKLY_STORAGE_KEY = 'meteorSplit_weekly';
+const STORAGE_KEY = 'meteorSplit_weekly';
 
-export interface WeeklyModifiers {
-  name: string;
-  description: string;
+/** ISO-ish week key, e.g. 2026-W07. Stable for the player's local week. */
+export const getWeekKey = (): string => {
+  const now = new Date();
+  const target = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  const dayNumber = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNumber + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((target.getTime() - firstThursday.getTime()) / 86400000 - 3 + ((firstThursday.getUTCDay() + 6) % 7)) / 7);
+  return `${target.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+};
+
+const weekSeed = (): number => {
+  const key = getWeekKey();
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) - hash) + key.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+const NAMES = [
+  'Iron Gauntlet', 'Nova Cascade', 'Shatter Run', 'Hollow Orbit',
+  'Ember Trial', 'Glass Horizon', 'Pulse Siege', 'Silent Debris',
+];
+
+export interface WeeklyModifiers extends DailyModifiers {
   seed: number;
-  spawnRateMult: number;
-  chaosMult: number;
-  meteorSizeMult: number;
-  bonusScoreMult: number;
-  specialStartLevel: number;
 }
+
+export const getWeeklyModifiers = (): WeeklyModifiers => {
+  const seed = weekSeed();
+  const rng = new SeededRNG(seed);
+  const name = NAMES[rng.int(0, NAMES.length - 1)];
+  const spawnRateMult = rng.range(1.0, 1.7);
+  const chaosMult = rng.range(0.9, 1.6);
+  const bonusScoreMult = rng.range(1.4, 2.6);
+  const traits = [
+    spawnRateMult > 1.35 ? 'Dense meteor fields' : 'Steady meteor fields',
+    chaosMult > 1.25 ? 'Chaos builds fast' : 'Chaos builds slowly',
+    `${bonusScoreMult.toFixed(1)}x score bonus`,
+  ];
+  return {
+    seed,
+    name,
+    description: `A week-long gauntlet: ${traits.join(' • ')}`,
+    spawnRateMult,
+    chaosMult,
+    meteorSizeMult: rng.range(0.85, 1.25),
+    bonusScoreMult,
+    specialStartLevel: rng.int(2, 3),
+  };
+};
 
 interface WeeklyData {
   week: string;
@@ -21,49 +64,30 @@ interface WeeklyData {
   attempts: number;
 }
 
-export const getWeekKey = (date = new Date()): string => {
-  const local = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const day = local.getDay() || 7;
-  local.setDate(local.getDate() - day + 1);
-  return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`;
-};
-
-const hash = (value: string) => [...value].reduce((acc, char) => ((acc << 5) - acc + char.charCodeAt(0)) | 0, 0) >>> 0;
-export const getWeeklySeed = () => hash(`meteor-split-week-${getWeekKey()}`);
-
-const getStoredWeekly = (): WeeklyData | null => {
+const getStored = (): WeeklyData | null => {
   try {
-    const parsed = JSON.parse(localStorage.getItem(WEEKLY_STORAGE_KEY) || '') as WeeklyData;
-    return parsed.week === getWeekKey() ? parsed : null;
-  } catch { return null; }
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as WeeklyData;
+    if (parsed.week !== getWeekKey()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 };
 
-export const getWeeklyModifiers = (): WeeklyModifiers => {
-  const seed = getWeeklySeed();
-  const rng = new SeededRNG(seed);
-  const sectors = ['ECLIPSE CIRCUIT', 'ION FRONTIER', 'NOVA GAUNTLET', 'VOID RELAY', 'AURORA RIFT'];
-  return {
-    name: sectors[rng.int(0, sectors.length - 1)],
-    description: 'Shared sector rules generated from this fixed weekly seed, with one leaderboard for the week.',
-    seed,
-    spawnRateMult: rng.range(1.05, 1.35),
-    chaosMult: rng.range(0.8, 1.15),
-    meteorSizeMult: rng.range(0.9, 1.15),
-    bonusScoreMult: rng.range(1.2, 1.8),
-    specialStartLevel: rng.int(2, 3),
-  };
-};
+export const getWeeklyLeaderboard = (): LeaderboardEntry[] => getStored()?.leaderboard ?? [];
+export const getWeeklyBestScore = (): number => getStored()?.bestScore ?? 0;
+export const getWeeklyAttempts = (): number => getStored()?.attempts ?? 0;
 
-export const getWeeklyLeaderboard = () => getStoredWeekly()?.leaderboard ?? [];
-export const getWeeklyBestScore = () => getStoredWeekly()?.bestScore ?? 0;
-export const getWeeklyAttempts = () => getStoredWeekly()?.attempts ?? 0;
-
-export const addWeeklyEntry = (entry: LeaderboardEntry) => {
-  const existing = getStoredWeekly() ?? { week: getWeekKey(), leaderboard: [], bestScore: 0, attempts: 0 };
-  existing.leaderboard = [...existing.leaderboard, entry].sort((a, b) => b.score - a.score).slice(0, 10);
-  existing.bestScore = Math.max(existing.bestScore, entry.score);
-  existing.attempts += 1;
-  existing.week = getWeekKey();
-  localStorage.setItem(WEEKLY_STORAGE_KEY, JSON.stringify(existing));
-  return existing.leaderboard;
+export const addWeeklyEntry = (entry: LeaderboardEntry): LeaderboardEntry[] => {
+  const data = getStored() ?? { week: getWeekKey(), leaderboard: [], bestScore: 0, attempts: 0 };
+  data.leaderboard.push(entry);
+  data.leaderboard.sort((a, b) => b.score - a.score);
+  data.leaderboard = data.leaderboard.slice(0, 10);
+  data.bestScore = Math.max(data.bestScore, entry.score);
+  data.attempts++;
+  data.week = getWeekKey();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  return data.leaderboard;
 };

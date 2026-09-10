@@ -1,74 +1,73 @@
-# Meteor Split Mania
+# Welcome to your Lovable project
 
-> **Tap. Split. Survive the chaos.**
+## Project info
 
-A fast, one-touch arcade game built for the web and prepared for YouTube Playables. Crack incoming meteors into fragments, maintain a clean combo, and keep the Chaos Meter from overloading.
+**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
-## Highlights
+## How can I edit this code?
 
-- Infinite, biome-changing progression with escalating events
-- Shielded boss meteors with orbiting debris and weak points
-- Nova Pulse: a one-tap emergency blast with a cooldown
-- Daily and seeded weekly challenges, local scoreboards, and replayable missions
-- Unlockable meteor skins and visual themes
-- Post-run recap with accuracy, best combo, and boss statistics
-- Accessibility settings for larger UI, high contrast, and reduced flashing
-- YouTube Playables lifecycle, pause/resume, audio, score, and cloud-save support
+There are several ways of editing your application.
 
-## Controls
+**Use Lovable**
 
-| Action | Control |
-| --- | --- |
-| Split a meteor | Tap or click it |
-| Nova Pulse | Use the glowing NOVA PULSE button |
-| Fullscreen on the web | Press `F` |
-| Exit fullscreen | Press `Esc` |
+Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
 
-The game is intentionally playable with one finger. Accuracy matters: repeated taps on the same target raise the Chaos Meter.
+Changes made via Lovable will be committed automatically to this repo.
 
-## Run locally
+**Use your preferred IDE**
 
-Requires Node.js 20+ and npm.
+If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+
+The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+
+Follow these steps:
 
 ```sh
-git clone https://github.com/Rahul08319/meteor-split-mania.git
-cd meteor-split-mania
-npm ci
+# Step 1: Clone the repository using the project's Git URL.
+git clone <YOUR_GIT_URL>
+
+# Step 2: Navigate to the project directory.
+cd <YOUR_PROJECT_NAME>
+
+# Step 3: Install the necessary dependencies.
+npm i
+
+# Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
 
-Useful commands:
+**Edit a file directly in GitHub**
 
-```sh
-npm run build      # production bundle
-npm run test       # unit tests
-npm run lint       # lint source files
-```
+- Navigate to the desired file(s).
+- Click the "Edit" button (pencil icon) at the top right of the file view.
+- Make your changes and commit the changes.
 
-## Project structure
+**Use GitHub Codespaces**
 
-```text
-src/
-├── game/                 # game loop, mechanics, challenges, audio, Playables adapter
-├── components/           # reusable interface components
-├── pages/                # application entry screens
-└── index.css             # visual system and responsive shell
-```
+- Navigate to the main page of your repository.
+- Click on the "Code" button (green button) near the top right.
+- Select the "Codespaces" tab.
+- Click on "New codespace" to launch a new Codespace environment.
+- Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## YouTube Playables
+## What technologies are used for this project?
 
-The SDK loads before the game entry point. The game reports first-frame and ready states, listens for platform-controlled pause/resume, respects the platform audio setting, sends the player score, and loads cloud data before saving it.
+This project is built with:
 
-For release validation, build the project, host the generated `dist/` files with the required Playables CSP, then run the Test Suite link provided for the release in the YouTube Playables Developer Portal. The suite requires an onboarded Playables channel and cannot be completed from a local browser alone. See the official [integration requirements](https://developers.google.com/youtube/gaming/playables/certification/requirements_integration), [Test Suite guide](https://developers.google.com/youtube/gaming/playables/reference/test_suite_guide), and [design requirements](https://developers.google.com/youtube/gaming/playables/certification/requirements_design).
+- Vite
+- TypeScript
+- React
+- shadcn-ui
+- Tailwind CSS
 
-## Quality checks
+## How can I deploy this project?
 
-GitHub Actions runs install, production build, and unit tests for pushes and pull requests. Local progress and validation notes are kept in [progress.md](progress.md).
+Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
-## No monetization SDKs
+## Can I connect a custom domain to my Lovable project?
 
-This project deliberately contains no ad, in-app-purchase, or monetization integration.
+Yes, you can!
 
-## License
+To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
-No license has been selected yet. Add one before distributing the project publicly.
+Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
