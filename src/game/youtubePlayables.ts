@@ -1,50 +1,173 @@
 /**
- * Host-bridge for embedded game hosts (Instant Games / Playables style webviews).
- * Every call degrades to a safe local no-op when no host SDK is present, so the
- * same build runs in a browser, in the Capacitor APK, and inside a host webview.
+ * YouTube Playables SDK integration for Meteor Split Mania.
+ *
+ * Bridges the ytgame global (injected by the SDK script) with the game engine.
+ * Every call degrades gracefully to a safe no-op when the SDK is absent, so the
+ * same build works in a regular browser, Capacitor APK, Samsung Instant Games,
+ * and inside the YouTube Playables webview.
+ *
+ * SDK reference: https://developers.google.com/youtube/gaming/playables/reference/sdk
  */
+
 import { initPlatformLifecycle } from './platform';
 import { collectSnapshot, applySnapshot, SaveSnapshot } from './cloudSync';
 
-interface HostSdk {
-  game?: {
-    firstFrameReady?: () => void;
-    gameReady?: () => void;
-  };
-  system?: {
-    onPause?: (cb: () => void) => void;
-    onResume?: (cb: () => void) => void;
-    onAudioEnabledChange?: (cb: (enabled: boolean) => void) => void;
-    getLanguage?: () => string;
-  };
-  engagement?: {
-    sendScore?: (payload: { value: number }) => Promise<void>;
-  };
-  saveData?: {
-    save?: (data: string) => Promise<void>;
-    load?: () => Promise<string | null>;
-  };
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const getHost = (): HostSdk | null => {
-  const w = window as unknown as { ytgame?: HostSdk; SamsungInstantPlays?: HostSdk };
-  return w.ytgame ?? w.SamsungInstantPlays ?? null;
-};
+/** Returns true when the SDK is loaded AND we are inside the Playables env. */
+export const inPlayablesEnv = (): boolean =>
+  typeof window.ytgame !== 'undefined' && window.ytgame!.IN_PLAYABLES_ENV === true;
+
+/** Safe accessor — returns the ytgame global or null when absent. */
+const sdk = (): typeof ytgame | null =>
+  typeof window.ytgame !== 'undefined' ? window.ytgame! : null;
+
+// ─── Lifecycle ────────────────────────────────────────────────────────────────
 
 let firstFrameSent = false;
 let gameReadySent = false;
 
-export const notifyFirstFrameReady = () => {
+/**
+ * `ytgame.game.firstFrameReady()` — call once when the canvas has drawn its
+ * first frame.  Required: game is hidden until this fires.
+ */
+export const notifyFirstFrameReady = (): void => {
   if (firstFrameSent) return;
   firstFrameSent = true;
-  try { getHost()?.game?.firstFrameReady?.(); } catch { /* host optional */ }
+  try {
+    sdk()?.game.firstFrameReady();
+  } catch (err) {
+    sdk()?.health.logError();
+    console.warn('[ytgame] firstFrameReady error:', err);
+  }
 };
 
-export const notifyGameReady = () => {
+/**
+ * `ytgame.game.gameReady()` — call once when the loading screen is gone and
+ * the game is fully interactable.  Required for certification.
+ */
+export const notifyGameReady = (): void => {
   if (gameReadySent) return;
   gameReadySent = true;
-  try { getHost()?.game?.gameReady?.(); } catch { /* host optional */ }
+  try {
+    sdk()?.game.gameReady();
+  } catch (err) {
+    sdk()?.health.logError();
+    console.warn('[ytgame] gameReady error:', err);
+  }
 };
+
+// ─── Cloud Save ───────────────────────────────────────────────────────────────
+
+/**
+ * `ytgame.game.saveData()` — persists the full game snapshot (progress,
+ * settings, skins, leaderboard) to YouTube cloud storage.
+ * Falls back silently — data always lives in localStorage too.
+ */
+export const saveYouTubeProgress = async (): Promise<void> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv()) return;
+  try {
+    const data = JSON.stringify(collectSnapshot());
+    if (!data.isWellFormed?.()) {
+      // String.isWellFormed is ES2024 — guard for older runtimes
+      console.warn('[ytgame] saveData: snapshot is not a well-formed UTF-16 string');
+      return;
+    }
+    await g.game.saveData(data);
+  } catch (err) {
+    g.health.logError();
+    console.warn('[ytgame] saveData error:', err);
+  }
+};
+
+/**
+ * `ytgame.game.loadData()` — loads the cloud snapshot and merges it with
+ * localStorage. Returns true when cloud data was applied.
+ */
+export const loadYouTubeProgress = async (): Promise<boolean> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv()) return false;
+  try {
+    const raw = await g.game.loadData();
+    if (!raw) return false;
+    applySnapshot(JSON.parse(raw) as SaveSnapshot);
+    return true;
+  } catch (err) {
+    g.health.logWarning();
+    console.warn('[ytgame] loadData error:', err);
+    return false;
+  }
+};
+
+// ─── Score ────────────────────────────────────────────────────────────────────
+
+/**
+ * `ytgame.engagement.sendScore()` — reports the best score to YouTube so it
+ * can be displayed in the game's YouTube UI card.
+ */
+export const sendYouTubeScore = async (score: number): Promise<void> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv() || score <= 0) return;
+  // Score must be a safe integer
+  const safeScore = Math.min(Math.floor(score), Number.MAX_SAFE_INTEGER);
+  try {
+    await g.engagement.sendScore({ value: safeScore });
+  } catch (err) {
+    g.health.logWarning();
+    console.warn('[ytgame] sendScore error:', err);
+  }
+};
+
+// ─── Ads ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Reward ID constants.
+ * Each ID is a stable, hard-coded string that uniquely identifies a reward type.
+ * Must NOT contain user data.
+ */
+export const REWARD_IDS = {
+  EXTRA_LIFE: 'meteor-split-extra-life-001',
+  SLOW_MO_BOOST: 'meteor-split-slowmo-boost-001',
+  SHIELD_POWER: 'meteor-split-shield-power-001',
+} as const;
+
+/**
+ * `ytgame.ads.requestInterstitialAd()` — shows an interstitial at a natural
+ * game break (game over, between levels). Never use to reward players.
+ * Returns true when the request was accepted.
+ */
+export const showInterstitialAd = async (): Promise<boolean> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv()) return false;
+  try {
+    await g.ads.requestInterstitialAd();
+    return true;
+  } catch (err) {
+    // Errors here are expected (no fill, ad not available, etc.)
+    g.health.logWarning();
+    return false;
+  }
+};
+
+/**
+ * `ytgame.ads.requestRewardedAd()` — shows a rewarded ad and returns whether
+ * the player earned the reward.
+ * @param rewardId Use a constant from REWARD_IDS.
+ */
+export const showRewardedAd = async (rewardId: string): Promise<boolean> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv()) return false;
+  try {
+    const earned = await g.ads.requestRewardedAd(rewardId);
+    return earned;
+  } catch (err) {
+    g.health.logWarning();
+    return false;
+  }
+};
+
+// ─── System events & callbacks ────────────────────────────────────────────────
 
 export interface HostCallbacks {
   onAudioEnabled: (enabled: boolean) => void;
@@ -53,52 +176,92 @@ export interface HostCallbacks {
   onLanguage: (locale: string) => void;
 }
 
+/**
+ * Registers all required YouTube Playables system callbacks and initialises the
+ * platform lifecycle shim (audio unlock, visibility-based pause/resume).
+ *
+ * Required callbacks wired up here:
+ *  - `ytgame.system.isAudioEnabled()` — initial audio state (synchronous)
+ *  - `ytgame.system.onAudioEnabledChange()` — ongoing audio mute/unmute
+ *  - `ytgame.system.onPause()` — host pause (backgrounded, ad playing, etc.)
+ *  - `ytgame.system.onResume()` — host resume
+ *  - `ytgame.system.getLanguage()` — BCP-47 locale for UI localisation
+ *
+ * @returns cleanup function — call on component unmount.
+ */
 export const initializeYouTubePlayables = (cb: HostCallbacks): (() => void) => {
-  const host = getHost();
-  try {
-    host?.system?.onPause?.(cb.onPause);
-    host?.system?.onResume?.(cb.onResume);
-    host?.system?.onAudioEnabledChange?.(cb.onAudioEnabled);
-    const locale = host?.system?.getLanguage?.();
-    if (locale) cb.onLanguage(locale);
-  } catch { /* host optional */ }
+  const g = sdk();
+  const cleanupFns: Array<() => void> = [];
 
-  // Works with or without a host SDK: unlocks audio on first gesture and
-  // pauses/resumes with page visibility.
-  return initPlatformLifecycle({
+  if (g) {
+    try {
+      // ── Required: initial audio state ──────────────────────────────────────
+      const audioEnabled = g.system.isAudioEnabled();
+      cb.onAudioEnabled(audioEnabled);
+
+      // ── Required: ongoing audio state changes ──────────────────────────────
+      const unsetAudio = g.system.onAudioEnabledChange((enabled) => {
+        cb.onAudioEnabled(enabled);
+      });
+      if (typeof unsetAudio === 'function') cleanupFns.push(unsetAudio);
+
+      // ── Required: pause / resume ───────────────────────────────────────────
+      const unsetPause = g.system.onPause(() => {
+        cb.onPause();
+      });
+      if (typeof unsetPause === 'function') cleanupFns.push(unsetPause);
+
+      const unsetResume = g.system.onResume(() => {
+        cb.onResume();
+      });
+      if (typeof unsetResume === 'function') cleanupFns.push(unsetResume);
+
+      // ── Recommended: locale ────────────────────────────────────────────────
+      g.system.getLanguage().then((locale) => {
+        if (locale) cb.onLanguage(locale);
+      }).catch((err) => {
+        g.health.logWarning();
+        console.warn('[ytgame] getLanguage error:', err);
+      });
+    } catch (err) {
+      g.health.logError();
+      console.warn('[ytgame] initializeYouTubePlayables error:', err);
+    }
+  }
+
+  // Platform shim: works with or without the SDK.
+  // Unlocks audio on first gesture and bridges visibility-based pause/resume
+  // for browsers and Capacitor builds that have no host SDK.
+  const cleanupPlatform = initPlatformLifecycle({
     onUnlockAudio: () => cb.onAudioEnabled(true),
     onPause: cb.onPause,
     onResume: cb.onResume,
   });
+
+  return () => {
+    cleanupFns.forEach((fn) => { try { fn(); } catch { /* ignore */ } });
+    cleanupPlatform();
+  };
 };
 
-export const saveYouTubeProgress = async (): Promise<void> => {
-  const host = getHost();
-  if (!host?.saveData?.save) return;
-  try { await host.saveData.save(JSON.stringify(collectSnapshot())); }
-  catch { /* progress still lives in local storage */ }
+// ─── Health logging helpers ───────────────────────────────────────────────────
+
+/**
+ * Log a game error to YouTube's health system (best-effort, rate-limited).
+ * Use inside catch blocks for critical game paths.
+ */
+export const logYTError = (): void => {
+  try { sdk()?.health.logError(); } catch { /* ignore */ }
 };
 
-export const loadYouTubeProgress = async (): Promise<boolean> => {
-  const host = getHost();
-  if (!host?.saveData?.load) return false;
-  try {
-    const raw = await host.saveData.load();
-    if (!raw) return false;
-    applySnapshot(JSON.parse(raw) as SaveSnapshot);
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * Log a game warning to YouTube's health system (best-effort, rate-limited).
+ */
+export const logYTWarning = (): void => {
+  try { sdk()?.health.logWarning(); } catch { /* ignore */ }
 };
 
-export const sendYouTubeScore = async (score: number): Promise<void> => {
-  const host = getHost();
-  if (!host?.engagement?.sendScore) return;
-  try { await host.engagement.sendScore({ value: score }); }
-  catch { /* scores still stored locally */ }
-};
-
+// ─── Window augmentation for test environment ─────────────────────────────────
 declare global {
   interface Window {
     render_game_to_text?: () => string;

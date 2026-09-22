@@ -15,10 +15,10 @@ import SkinPreview from '@/components/SkinPreview';
 import CloudSyncPanel from '@/components/CloudSyncPanel';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore } from './youtubePlayables';
+import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, showInterstitialAd, showRewardedAd, REWARD_IDS, logYTError, inPlayablesEnv } from './youtubePlayables';
 import { createRunMissions, RunMission, updateRunMissions } from './missions';
 import { addWeeklyEntry, getWeeklyAttempts, getWeeklyBestScore, getWeeklyLeaderboard, getWeeklyModifiers, getWeekKey } from './weekly';
-import { applyUiScale, isReducedMotion, mapHue } from './a11y';
+
 
 const MAX_METEORS = 60;
 const CHAOS_THRESHOLD = 0.7;
@@ -438,8 +438,11 @@ export default function MeteorSplitGame() {
       }
       refreshUnlocks();
       addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 50, 0, 'chaos');
-      setScreen('gameover');
       void saveYouTubeProgress();
+      // Show interstitial ad at natural game break (game over screen).
+      // Fire-and-forget: game continues to game-over screen regardless of ad result.
+      void showInterstitialAd();
+      setScreen('gameover');
     }
   }, [triggerSpecialEvent, gameMode, refreshUnlocks, updateMissionProgress]);
 
@@ -1271,6 +1274,23 @@ export default function MeteorSplitGame() {
             </div>
             {uiState.score >= uiState.highScore && uiState.score > 0 && (
               <p className="font-display text-sm mt-2" style={{ color: 'hsl(var(--score-gold))' }}>★ NEW HIGH SCORE ★</p>
+            )}
+            {/* Rewarded ad — only shown inside YouTube Playables environment */}
+            {inPlayablesEnv() && (
+              <button
+                className="w-full font-display text-xs px-4 py-2 rounded-lg mt-4"
+                style={{ backgroundColor: 'hsl(var(--secondary) / 0.15)', color: 'hsl(var(--secondary))', border: '1px solid hsl(var(--secondary) / 0.4)' }}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const earned = await showRewardedAd(REWARD_IDS.SLOW_MO_BOOST);
+                  if (earned) {
+                    // Store reward for next run — picked up in startGame
+                    localStorage.setItem('meteorSplit_pendingSlowMo', '1');
+                  }
+                }}
+              >
+                📺 WATCH AD — EARN SLOW-MO BOOST
+              </button>
             )}
             <div className="font-display text-base mt-6 animate-pulse" style={{ color: 'hsl(var(--foreground))' }}>TAP TO CONTINUE</div>
           </div>
