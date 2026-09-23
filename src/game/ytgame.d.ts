@@ -122,22 +122,6 @@ declare namespace ytgame {
     function openYTContent(content: Content): Promise<void>;
   }
 
-  namespace ads {
-    /**
-     * Requests an interstitial ad to be shown.
-     * Makes no guarantee whether the ad was actually shown.
-     * Do NOT use to reward players.
-     */
-    function requestInterstitialAd(): Promise<void>;
-
-    /**
-     * Requests a rewarded ad for a specific reward type.
-     * @param rewardId A unique, stable ID per reward type. Must not contain user data.
-     * @returns true if user met reward conditions, false otherwise.
-     */
-    function requestRewardedAd(rewardId: string): Promise<boolean>;
-  }
-
   namespace health {
     /**
      * Logs an error to YouTube (best-effort, rate-limited).

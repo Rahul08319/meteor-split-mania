@@ -15,10 +15,10 @@ import SkinPreview from '@/components/SkinPreview';
 import CloudSyncPanel from '@/components/CloudSyncPanel';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, showInterstitialAd, showRewardedAd, REWARD_IDS, logYTError, inPlayablesEnv } from './youtubePlayables';
+import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, logYTError } from './youtubePlayables';
 import { createRunMissions, RunMission, updateRunMissions } from './missions';
 import { addWeeklyEntry, getWeeklyAttempts, getWeeklyBestScore, getWeeklyLeaderboard, getWeeklyModifiers, getWeekKey } from './weekly';
-
+import { createWebGLBackdrop, WebGLBackdrop } from './webglBackdrop';
 
 const MAX_METEORS = 60;
 const CHAOS_THRESHOLD = 0.7;
@@ -143,6 +143,8 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 
 export default function MeteorSplitGame() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const backdropCanvasRef = useRef<HTMLCanvasElement>(null);
+  const backdropRef = useRef<WebGLBackdrop | null>(null);
   const gameRef = useRef<GameState>({
     score: 0, level: 1, meteorsDestroyed: 0, chaosLevel: 0,
     gameOver: false, started: false,
@@ -439,9 +441,6 @@ export default function MeteorSplitGame() {
       refreshUnlocks();
       addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 50, 0, 'chaos');
       void saveYouTubeProgress();
-      // Show interstitial ad at natural game break (game over screen).
-      // Fire-and-forget: game continues to game-over screen regardless of ad result.
-      void showInterstitialAd();
       setScreen('gameover');
     }
   }, [triggerSpecialEvent, gameMode, refreshUnlocks, updateMissionProgress]);
@@ -641,6 +640,17 @@ export default function MeteorSplitGame() {
   }, [activatePulse]);
 
   useEffect(() => {
+    const canvas = backdropCanvasRef.current;
+    if (!canvas) return;
+    const backdrop = createWebGLBackdrop(canvas);
+    backdropRef.current = backdrop;
+    return () => {
+      if (backdropRef.current === backdrop) backdropRef.current = null;
+      backdrop.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -657,6 +667,7 @@ export default function MeteorSplitGame() {
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
       canvas.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
+      backdropRef.current?.resize(width, height, dpr);
       initStars(width, height);
     };
     resize();
@@ -691,6 +702,7 @@ export default function MeteorSplitGame() {
       const accessibility = getSettings();
       const reducedMotion = isReducedMotion();
       const biome = getBiome(game.level);
+      backdropRef.current?.render(now, biome.hue, game.chaosLevel);
 
       const timeScale = game.slowmoTimer > 0 ? 0.4 : 1;
       const dt = rawDt * timeScale;
@@ -789,15 +801,8 @@ export default function MeteorSplitGame() {
       ctx.save();
       ctx.translate(sx, sy);
 
-      // Background with theme
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, `hsl(${theme.bgGradient[0]})`);
-      grad.addColorStop(0.5, `hsl(${theme.bgGradient[1]})`);
-      grad.addColorStop(1, `hsl(${theme.bgGradient[2]})`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(-10, -10, w + 20, h + 20);
-      ctx.fillStyle = `hsla(${biome.hue}, 75%, 35%, 0.16)`;
-      ctx.fillRect(-10, -10, w + 20, h + 20);
+      // The 2D layer stays transparent so the GPU-rendered cosmic scene is visible.
+      ctx.clearRect(-10, -10, w + 20, h + 20);
 
       if (game.chaosLevel > 0.3) {
         ctx.fillStyle = `hsla(${theme.chaosOverlayHue}, 80%, 20%, ${(game.chaosLevel - 0.3) * 0.3})`;
@@ -1071,6 +1076,7 @@ export default function MeteorSplitGame() {
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-background" style={{ filter: settingsState.highContrast ? 'contrast(1.18) saturate(1.08)' : undefined }}>
+      <canvas ref={backdropCanvasRef} aria-hidden="true" className="absolute inset-0 w-full h-full pointer-events-none" />
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
       {/* HUD */}
@@ -1274,23 +1280,6 @@ export default function MeteorSplitGame() {
             </div>
             {uiState.score >= uiState.highScore && uiState.score > 0 && (
               <p className="font-display text-sm mt-2" style={{ color: 'hsl(var(--score-gold))' }}>★ NEW HIGH SCORE ★</p>
-            )}
-            {/* Rewarded ad — only shown inside YouTube Playables environment */}
-            {inPlayablesEnv() && (
-              <button
-                className="w-full font-display text-xs px-4 py-2 rounded-lg mt-4"
-                style={{ backgroundColor: 'hsl(var(--secondary) / 0.15)', color: 'hsl(var(--secondary))', border: '1px solid hsl(var(--secondary) / 0.4)' }}
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const earned = await showRewardedAd(REWARD_IDS.SLOW_MO_BOOST);
-                  if (earned) {
-                    // Store reward for next run — picked up in startGame
-                    localStorage.setItem('meteorSplit_pendingSlowMo', '1');
-                  }
-                }}
-              >
-                📺 WATCH AD — EARN SLOW-MO BOOST
-              </button>
             )}
             <div className="font-display text-base mt-6 animate-pulse" style={{ color: 'hsl(var(--foreground))' }}>TAP TO CONTINUE</div>
           </div>
