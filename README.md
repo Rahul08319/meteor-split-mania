@@ -6,6 +6,10 @@
 
 **Tap. Split. Survive the chaos.**
 
+![Meteor Split Mania key art](./public/art/meteor-observatory-backdrop.png)
+
+> A cinematic, one-touch arcade survival game built for quick play sessions and real replayability.
+
 [Gameplay](#gameplay) · [Visual system](#visual-system) · [Run locally](#run-locally) · [Playables](#youtube-playables)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)

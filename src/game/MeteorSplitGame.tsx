@@ -15,6 +15,7 @@ import SkinPreview from '@/components/SkinPreview';
 import CloudSyncPanel from '@/components/CloudSyncPanel';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { CalendarDays, CircleHelp, Palette, Settings2, Trophy } from 'lucide-react';
 import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, logYTError } from './youtubePlayables';
 import { createRunMissions, RunMission, updateRunMissions } from './missions';
 import { addWeeklyEntry, getWeeklyAttempts, getWeeklyBestScore, getWeeklyLeaderboard, getWeeklyModifiers, getWeekKey } from './weekly';
@@ -532,6 +533,18 @@ export default function MeteorSplitGame() {
     setScreen('playing');
   }, [difficulty, selectedSkinId, selectedThemeId]);
 
+  const enterClassicFromTitle = useCallback(() => {
+    resumeAudio();
+    if (!hasSeenTutorial.current) {
+      hasSeenTutorial.current = true;
+      localStorage.setItem(TUTORIAL_KEY, '1');
+      setTutorialStep(0);
+      setScreen('tutorial');
+      return;
+    }
+    startGame('classic');
+  }, [startGame]);
+
   const handleTap = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     const game = gameRef.current;
@@ -546,14 +559,7 @@ export default function MeteorSplitGame() {
     const y = (clientY - rect.top) * scaleY;
 
     if (!game.started) {
-      if (!hasSeenTutorial.current) {
-        hasSeenTutorial.current = true;
-        localStorage.setItem(TUTORIAL_KEY, '1');
-        setTutorialStep(0);
-        setScreen('tutorial');
-        return;
-      }
-      startGame('classic');
+      enterClassicFromTitle();
       return;
     }
 
@@ -580,7 +586,7 @@ export default function MeteorSplitGame() {
 
     if (closest) { game.hits++; splitMeteor(closest, x, y); }
     else game.combo = 0;
-  }, [splitMeteor, collectPowerUp, startGame]);
+  }, [splitMeteor, collectPowerUp, enterClassicFromTitle]);
 
   // Restore cloud progress before declaring the title screen ready to YouTube.
   useEffect(() => {
@@ -1203,9 +1209,10 @@ export default function MeteorSplitGame() {
           <div className="title-orbit title-orbit-one" aria-hidden="true" />
           <div className="title-orbit title-orbit-two" aria-hidden="true" />
           <div className="title-card">
-          <div className="title-kicker">ORBITAL ARCADE // 01</div>
-          <h1 className="font-display text-5xl md:text-7xl font-black text-glow mb-1 tracking-tight" style={{ color: 'hsl(var(--primary))' }}>METEOR</h1>
-          <h2 className="font-display text-3xl md:text-5xl font-bold text-glow-blue mb-5 tracking-[0.18em]" style={{ color: 'hsl(var(--secondary))' }}>SPLIT</h2>
+          <div className="title-kicker">ARCADE SURVIVAL</div>
+          <h1 className="title-wordmark font-display text-5xl md:text-7xl font-black text-glow mb-1 tracking-tight" style={{ color: 'hsl(var(--foreground))' }}>METEOR</h1>
+          <h2 className="title-wordmark-accent font-display text-3xl md:text-5xl font-bold text-glow-blue mb-3 tracking-[0.13em]" style={{ color: 'hsl(var(--secondary))' }}>SPLIT MANIA</h2>
+          <p className="title-subtitle font-body text-sm mb-5" style={{ color: 'hsl(var(--muted-foreground))' }}>Tap. Split. Survive the chaos.</p>
 
           {/* Difficulty selector */}
           <div className="flex gap-2 mb-5 justify-center">
@@ -1225,27 +1232,23 @@ export default function MeteorSplitGame() {
             })}
           </div>
 
-          <p className="font-body text-xs mb-5 tracking-wide" style={{ color: 'hsl(var(--accent))' }}>⚠ PRECISION OVER PANIC — OVER-TAPPING CREATES CHAOS</p>
+          <p className="title-rule font-body text-xs mb-5 tracking-[0.12em]" style={{ color: 'hsl(var(--accent))' }}>PRECISION OVER PANIC</p>
 
-          <div className="title-start font-display text-lg animate-pulse cursor-pointer mb-2" style={{ color: 'hsl(var(--foreground))' }}>TAP TO START</div>
+          <button type="button" className="title-start font-display text-base cursor-pointer mb-3" onClick={enterClassicFromTitle}>
+            TAP TO START
+          </button>
 
           {uiState.highScore > 0 && (
             <div className="font-body text-sm mb-4" style={{ color: 'hsl(var(--score-gold))' }}>Best: {uiState.highScore.toLocaleString()}</div>
           )}
 
-          <div className="flex flex-wrap gap-2 justify-center mt-3">
-            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
-              onClick={(e) => { e.stopPropagation(); setScreen('daily'); }}>📅 DAILY</button>
-            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
-              onClick={(e) => { e.stopPropagation(); setScreen('weekly'); }}>🛰 WEEKLY</button>
-            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
-              onClick={(e) => { e.stopPropagation(); setScreen('leaderboard'); }}>🏆 SCORES</button>
-            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
-              onClick={(e) => { e.stopPropagation(); refreshUnlocks(); setScreen('skins'); }}>🎨 SKINS</button>
-            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
-              onClick={(e) => { e.stopPropagation(); setTutorialStep(0); setScreen('tutorial'); }}>❓ HOW TO</button>
-            <button className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto" style={btnSecondary}
-              onClick={(e) => { e.stopPropagation(); setSettingsState(getSettings()); setScreen('settings'); }}>⚙ SETTINGS</button>
+          <div className="title-nav">
+            <button className="title-nav-item" onClick={() => setScreen('daily')}><CalendarDays size={17} strokeWidth={1.6} /><span>DAILY</span></button>
+            <button className="title-nav-item" onClick={() => setScreen('weekly')}><CalendarDays size={17} strokeWidth={1.6} /><span>WEEKLY</span></button>
+            <button className="title-nav-item" onClick={() => setScreen('leaderboard')}><Trophy size={17} strokeWidth={1.6} /><span>SCORES</span></button>
+            <button className="title-nav-item" onClick={() => { refreshUnlocks(); setScreen('skins'); }}><Palette size={17} strokeWidth={1.6} /><span>SKINS</span></button>
+            <button className="title-nav-item" onClick={() => { setTutorialStep(0); setScreen('tutorial'); }}><CircleHelp size={17} strokeWidth={1.6} /><span>HOW TO</span></button>
+            <button className="title-nav-item" onClick={() => { setSettingsState(getSettings()); setScreen('settings'); }}><Settings2 size={17} strokeWidth={1.6} /><span>SETTINGS</span></button>
           </div>
           <div className="title-footer">TAP METEORS TO SPLIT • BUILD COMBOS • SURVIVE THE FIELD</div>
           </div>
