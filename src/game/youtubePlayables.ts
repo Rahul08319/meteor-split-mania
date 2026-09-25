@@ -122,6 +122,54 @@ export const sendYouTubeScore = async (score: number): Promise<void> => {
   }
 };
 
+// ─── Ads ──────────────────────────────────────────────────────────────────────
+
+/**
+ * Reward ID constants.
+ * Each ID is a stable, hard-coded string that uniquely identifies a reward type.
+ * Must NOT contain user data.
+ */
+export const REWARD_IDS = {
+  EXTRA_LIFE: 'meteor-split-extra-life-001',
+  SLOW_MO_BOOST: 'meteor-split-slowmo-boost-001',
+  SHIELD_POWER: 'meteor-split-shield-power-001',
+} as const;
+
+/**
+ * `ytgame.ads.requestInterstitialAd()` — shows an interstitial at a natural
+ * game break (game over, between levels). Never use to reward players.
+ * Returns true when the request was accepted.
+ */
+export const showInterstitialAd = async (): Promise<boolean> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv()) return false;
+  try {
+    await g.ads.requestInterstitialAd();
+    return true;
+  } catch (err) {
+    // Errors here are expected (no fill, ad not available, etc.)
+    g.health.logWarning();
+    return false;
+  }
+};
+
+/**
+ * `ytgame.ads.requestRewardedAd()` — shows a rewarded ad and returns whether
+ * the player earned the reward.
+ * @param rewardId Use a constant from REWARD_IDS.
+ */
+export const showRewardedAd = async (rewardId: string): Promise<boolean> => {
+  const g = sdk();
+  if (!g || !inPlayablesEnv()) return false;
+  try {
+    const earned = await g.ads.requestRewardedAd(rewardId);
+    return earned;
+  } catch (err) {
+    g.health.logWarning();
+    return false;
+  }
+};
+
 // ─── System events & callbacks ────────────────────────────────────────────────
 
 export interface HostCallbacks {
