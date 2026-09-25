@@ -1,0 +1,11 @@
+{
+  "name": "Meteor Split Mania",
+  "short_name": "Meteor Split",
+  "description": "A one-touch cosmic arcade survival game.",
+  "start_url": "/",
+  "display": "fullscreen",
+  "background_color": "#050611",
+  "theme_color": "#07112a",
+  "orientation": "any",
+  "icons": [{ "src": "/placeholder.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

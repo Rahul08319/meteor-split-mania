@@ -1135,7 +1135,7 @@ export default function MeteorSplitGame() {
               }}>{mission.complete ? '✓' : mission.icon} {mission.progress.toLocaleString()}/{mission.target.toLocaleString()} {mission.title}</div>
             ))}
           </div>
-          <button aria-label="Activate Nova Pulse" className="absolute bottom-5 right-4 z-20 w-16 h-16 rounded-full font-display text-[10px] font-bold pointer-events-auto transition-all" style={{
+          <button aria-label="Activate Nova Pulse" className="nova-pulse absolute bottom-5 right-4 z-20 w-16 h-16 rounded-full font-display text-[10px] font-bold pointer-events-auto transition-all" style={{
             backgroundColor: uiState.pulseCooldown <= 0 ? 'hsl(190, 85%, 45% / 0.92)' : 'hsl(var(--muted) / 0.88)',
             color: 'hsl(var(--foreground))',
             border: `2px solid ${uiState.pulseCooldown <= 0 ? 'hsl(190, 95%, 75%)' : 'hsl(var(--border))'}`,

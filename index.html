@@ -6,6 +6,8 @@
     <title>Meteor Split Mania</title>
     <meta name="description" content="Tap to split meteors before they overwhelm you! A fast-paced arcade game playable on YouTube." />
     <meta name="author" content="Rahul Kumar" />
+    <meta name="theme-color" content="#07112a" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
     <meta property="og:title" content="Meteor Split Mania" />
     <meta property="og:description" content="Tap to split meteors before they overwhelm you! A fast-paced arcade game playable on YouTube." />
@@ -13,13 +15,7 @@
 
     <meta name="twitter:card" content="summary_large_image" />
 
-    <!--
-      IMPORTANT: The YouTube Playables SDK MUST be the very first script loaded.
-      It creates a reproducible, sandboxed environment and makes ytgame functions
-      available before any game code runs.
-      https://developers.google.com/youtube/gaming/playables/reference/sdk
-    -->
-    <script src="https://www.youtube.com/game_api/v1"></script>
+    <!-- platform-sdk: injected at build time for YouTube builds only -->
   </head>
 
   <body>

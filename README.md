@@ -74,6 +74,29 @@ npm run test       # unit tests
 npm run lint       # lint source files
 ```
 
+## Distribution builds
+
+One codebase produces platform-specific static folders without Playgama or player-visible platform controls. The target selects packaging only; gameplay, saves, accessibility, and the visual system remain the same.
+
+```sh
+# Build a single upload folder, for example dist/crazygames
+npm run build:target -- --target crazygames
+
+# Build every static portal target
+npm run build:all-platforms
+```
+
+| Target | Build target | Delivery note |
+| --- | --- | --- |
+| YouTube Playables | `youtube-playables` | Includes the official YouTube SDK before the game module. |
+| Facebook, Poki, CrazyGames, Yandex, GameDistribution | `facebook-instant-games`, `poki`, `crazygames`, `yandex-games`, `gamedistribution` | Upload the generated HTML5 folder through the relevant partner portal. |
+| Discord, JioGames, Y8, Lagged, MSN, Reddit | `discord-activities`, `jiogames`, `y8`, `lagged`, `msn-games`, `reddit-games` | SDK-free HTML5 build. Partner features need the platform's own approval and documentation. |
+| Microsoft Store | `microsoft-store-pwa` | Includes a PWA manifest and offline shell service worker. Package the hosted PWA for Store submission. |
+| Huawei / Xiaomi Quick Games | `huawei-quick-game`, `xiaomi-quick-game` | Static game source is prepared; their native wrappers and signing must be completed in their vendor tooling. |
+
+> [!IMPORTANT]
+> Store accounts, review, native signing, and optional social/leaderboard APIs cannot be completed from this repository alone. This project deliberately does not bundle Playgama, advertisements, payments, or third-party portal SDKs.
+
 ## Architecture
 
 ```text

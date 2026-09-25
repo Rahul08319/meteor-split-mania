@@ -10,7 +10,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:target": "node scripts/build-targets.mjs",
+    "build:all-platforms": "node scripts/build-targets.mjs --all"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
