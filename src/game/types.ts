@@ -35,6 +35,16 @@ export interface Particle {
   type: 'spark' | 'debris' | 'chaos' | 'shower';
 }
 
+export interface Shockwave {
+  x: number;
+  y: number;
+  life: number;
+  maxLife: number;
+  maxRadius: number;
+  hue: number;
+  width: number;
+}
+
 export interface Star {
   x: number;
   y: number;

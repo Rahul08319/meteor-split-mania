@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Meteor, Particle, Star, GameState, PowerUp, PowerUpType } from './types';
+import { Meteor, Particle, Shockwave, Star, GameState, PowerUp, PowerUpType } from './types';
 import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM, setSfxVolume, setMusicVolume, setHostAudioEnabled, suspendAudio } from './sounds';
 import { addLeaderboardEntry, getLeaderboard, getStats } from './leaderboard';
 import { Difficulty, DIFFICULTY_CONFIGS, DifficultyConfig } from './difficulty';
@@ -157,6 +157,7 @@ export default function MeteorSplitGame() {
   });
   const meteorsRef = useRef<Meteor[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const shockwavesRef = useRef<Shockwave[]>([]);
   const starsRef = useRef<Star[]>([]);
   const powerupsRef = useRef<PowerUp[]>([]);
   const spawnTimerRef = useRef(0);
@@ -262,6 +263,11 @@ export default function MeteorSplitGame() {
     }
   };
 
+  const addShockwave = (x: number, y: number, hue: number, maxRadius = 110, maxLife = 460, width = 3) => {
+    if (shockwavesRef.current.length >= 10) shockwavesRef.current.shift();
+    shockwavesRef.current.push({ x, y, hue, maxRadius, maxLife, life: maxLife, width });
+  };
+
   const triggerSpecialEvent = useCallback((w: number, h: number) => {
     const game = gameRef.current;
     const cfg = diffConfigRef.current;
@@ -301,6 +307,7 @@ export default function MeteorSplitGame() {
       meteor.bossWeakPointAngle = (weakAngle + Math.PI * 0.78) % (Math.PI * 2);
       game.screenShake = Math.min(game.screenShake + 4, 12);
       addParticles(tapX, tapY, 12, meteor.bossShield ? 195 : 300, 'spark');
+      addShockwave(tapX, tapY, meteor.bossShield ? 195 : 300, meteor.radius * 1.4, 330, 3);
       playBossHit();
 
       if ((meteor.bossShield ?? 0) > 0) {
@@ -315,6 +322,7 @@ export default function MeteorSplitGame() {
         meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
         addParticles(meteor.x, meteor.y, 40, 300, 'spark');
         addParticles(meteor.x, meteor.y, 20, 50, 'debris');
+        addShockwave(meteor.x, meteor.y, 300, meteor.radius * 3.2, 700, 5);
         game.score += Math.round(500 * game.scoreMultiplier * cfg.scoreMultiplier);
         game.bossDefeated++;
         game.screenShake = 15;
@@ -334,6 +342,7 @@ export default function MeteorSplitGame() {
 
     meteor.tapCount++;
     const mult = game.scoreMultiplier * cfg.scoreMultiplier * (dailyModRef.current?.bonusScoreMult ?? 1);
+    addShockwave(tapX, tapY, skin.particleHue, Math.max(48, meteor.radius * 2.1), 360, 2.5);
 
     if (meteor.generation >= 3) {
       meteorsRef.current = meteorsRef.current.filter(m => m.id !== meteor.id);
@@ -482,6 +491,7 @@ export default function MeteorSplitGame() {
     game.meteorsDestroyed += cleared;
     game.score += Math.round(cleared * 20 * game.scoreMultiplier * diffConfigRef.current.scoreMultiplier);
     addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 36, 190, 'spark');
+    addShockwave(viewportRef.current.width / 2, viewportRef.current.height / 2, 190, Math.hypot(viewportRef.current.width, viewportRef.current.height) * 0.68, 850, 6);
     hapticPowerUp();
     updateMissionProgress();
   }, [updateMissionProgress]);
@@ -523,6 +533,7 @@ export default function MeteorSplitGame() {
     game.hits = 0;
     meteorsRef.current = [];
     particlesRef.current = [];
+    shockwavesRef.current = [];
     powerupsRef.current = [];
     spawnTimerRef.current = 0;
     showerTimerRef.current = 0;
@@ -800,6 +811,12 @@ export default function MeteorSplitGame() {
         if (p.life <= 0) particlesRef.current.splice(i, 1);
       }
 
+      for (let i = shockwavesRef.current.length - 1; i >= 0; i--) {
+        const wave = shockwavesRef.current[i];
+        wave.life -= rawDt;
+        if (wave.life <= 0) shockwavesRef.current.splice(i, 1);
+      }
+
       // === DRAW ===
       const shake = reducedMotion ? 0 : game.screenShake;
       const sx = shake > 0.5 ? (Math.random() - 0.5) * shake : 0;
@@ -980,6 +997,22 @@ export default function MeteorSplitGame() {
       }
 
       // Particles
+      for (const wave of shockwavesRef.current) {
+        const progress = 1 - wave.life / wave.maxLife;
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const radius = wave.maxRadius * eased;
+        const alpha = (1 - progress) * (reducedMotion ? 0.35 : 0.72);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(wave.x, wave.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `hsla(${mapHue(wave.hue, accessibility.colorBlindMode)}, 95%, 76%, ${alpha})`;
+        ctx.shadowColor = `hsla(${wave.hue}, 95%, 65%, ${alpha})`;
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = Math.max(1, wave.width * (1 - progress * 0.55));
+        ctx.stroke();
+        ctx.restore();
+      }
+
       for (const p of particlesRef.current) {
         const alpha = p.life;
         if (p.type === 'chaos') {
@@ -1042,6 +1075,7 @@ export default function MeteorSplitGame() {
         missions: missionsRef.current.map(({ id, progress, target, complete }) => ({ id, progress, target, complete })),
         meteors: meteorsRef.current.map(({ x, y, radius, generation, isBoss, bossHp, bossShield }) => ({ x, y, radius, generation, isBoss, bossHp, bossShield })),
         powerups: powerupsRef.current.map(({ x, y, type, life }) => ({ x, y, type, life })),
+        shockwaves: shockwavesRef.current.map(({ x, y, life, maxLife, maxRadius }) => ({ x, y, progress: 1 - life / maxLife, maxRadius })),
       });
     };
     window.advanceTime = (milliseconds: number) => {

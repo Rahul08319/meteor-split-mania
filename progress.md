@@ -19,3 +19,8 @@ Original prompt: Make Meteor Split Mania more realistic and aesthetic; create SD
 - `npm run build` completed successfully after the title-screen changes.
 - Browser verification completed in the Codex in-app browser: title → tutorial → gameplay and Settings → Back both worked.
 - The local Vitest command is inconclusive: it begins but does not return a completion summary in this environment; its sandboxed attempt could not read the local config. See the next pass if test-runner diagnosis is needed.
+
+## 2026-09-25 — Gameplay feedback
+- Added canvas-drawn kinetic impact shockwaves for successful meteor splits, boss weak-point hits, boss defeats, and Nova Pulse.
+- Shockwaves respect reduced-motion settings, are capped for stable performance, and are exposed through `render_game_to_text` for UI test automation.
+- Verified with `npm run build`, `git diff --check`, and the focused Vitest file (`src/test/example.test.ts`, 1 passing test).
