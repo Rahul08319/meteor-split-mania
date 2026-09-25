@@ -48,6 +48,9 @@ export const notifyFirstFrameReady = (): void => {
  */
 export const notifyGameReady = (): void => {
   if (gameReadySent) return;
+  if (!firstFrameSent) {
+    notifyFirstFrameReady();
+  }
   gameReadySent = true;
   try {
     sdk()?.game.gameReady();
