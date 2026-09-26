@@ -24,3 +24,5 @@ Original prompt: Make Meteor Split Mania more realistic and aesthetic; create SD
 - Added canvas-drawn kinetic impact shockwaves for successful meteor splits, boss weak-point hits, boss defeats, and Nova Pulse.
 - Shockwaves respect reduced-motion settings, are capped for stable performance, and are exposed through `render_game_to_text` for UI test automation.
 - Verified with `npm run build`, `git diff --check`, and the focused Vitest file (`src/test/example.test.ts`, 1 passing test).
+- Added combo Resonance rewards every fifth consecutive meteor destroyed: bonus score, a small chaos reduction, and a 1.5-second Nova Pulse cooldown reduction, with animated in-game feedback.
+- Re-verified the production build, focused game-file ESLint, and the existing Vitest file (1 passing test).

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { Meteor, Particle, Shockwave, Star, GameState, PowerUp, PowerUpType } from './types';
+import { Meteor, Particle, Shockwave, CombatText, Star, GameState, PowerUp, PowerUpType } from './types';
 import { playSplit, playDestroy, playChaos, playCombo, playChaosOverload, playPowerUp, playBossHit, playBossDefeat, playShowerWarning, resumeAudio, startBGM, updateBGMChaos, stopBGM, setSfxVolume, setMusicVolume, setHostAudioEnabled, suspendAudio } from './sounds';
 import { addLeaderboardEntry, getLeaderboard, getStats } from './leaderboard';
 import { Difficulty, DIFFICULTY_CONFIGS, DifficultyConfig } from './difficulty';
@@ -158,6 +158,7 @@ export default function MeteorSplitGame() {
   const meteorsRef = useRef<Meteor[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const shockwavesRef = useRef<Shockwave[]>([]);
+  const combatTextRef = useRef<CombatText[]>([]);
   const starsRef = useRef<Star[]>([]);
   const powerupsRef = useRef<PowerUp[]>([]);
   const spawnTimerRef = useRef(0);
@@ -250,7 +251,7 @@ export default function MeteorSplitGame() {
     starsRef.current = stars;
   }, []);
 
-  const addParticles = (x: number, y: number, count: number, hue: number, type: 'spark' | 'debris' | 'chaos' | 'shower') => {
+  const addParticles = useCallback((x: number, y: number, count: number, hue: number, type: 'spark' | 'debris' | 'chaos' | 'shower') => {
     for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const spd = type === 'chaos' ? 2 + Math.random() * 5 : type === 'shower' ? 1 + Math.random() * 2 : 1 + Math.random() * 3;
@@ -261,12 +262,26 @@ export default function MeteorSplitGame() {
         hue, type,
       });
     }
-  };
+  }, []);
 
-  const addShockwave = (x: number, y: number, hue: number, maxRadius = 110, maxLife = 460, width = 3) => {
+  const addShockwave = useCallback((x: number, y: number, hue: number, maxRadius = 110, maxLife = 460, width = 3) => {
     if (shockwavesRef.current.length >= 10) shockwavesRef.current.shift();
     shockwavesRef.current.push({ x, y, hue, maxRadius, maxLife, life: maxLife, width });
-  };
+  }, []);
+
+  const triggerComboMilestone = useCallback((x: number, y: number) => {
+    const game = gameRef.current;
+    if (game.combo === 0 || game.combo % 5 !== 0) return;
+    const multiplier = game.scoreMultiplier * diffConfigRef.current.scoreMultiplier;
+    game.score += Math.round(100 * game.combo * multiplier);
+    game.chaosLevel = Math.max(0, game.chaosLevel - 0.08);
+    game.pulseCooldown = Math.max(0, game.pulseCooldown - 1500);
+    game.screenShake = Math.min(game.screenShake + 5, 15);
+    addShockwave(x, y, 48, 210, 560, 4);
+    addParticles(x, y, 22, 48, 'spark');
+    combatTextRef.current.push({ x, y, text: `${game.combo}× RESONANCE  +${Math.round(100 * game.combo * multiplier)}`, life: 1100, maxLife: 1100, hue: 48 });
+    if (combatTextRef.current.length > 6) combatTextRef.current.shift();
+  }, [addParticles, addShockwave]);
 
   const triggerSpecialEvent = useCallback((w: number, h: number) => {
     const game = gameRef.current;
@@ -352,6 +367,7 @@ export default function MeteorSplitGame() {
       game.combo++;
       game.maxCombo = Math.max(game.maxCombo, game.combo);
       game.comboTimer = COMBO_TIMEOUT;
+      triggerComboMilestone(meteor.x, meteor.y);
       game.screenShake = Math.min(game.screenShake + 2, 8);
       playDestroy();
       hapticDestroy();
@@ -404,6 +420,7 @@ export default function MeteorSplitGame() {
       game.combo++;
       game.maxCombo = Math.max(game.maxCombo, game.combo);
       game.comboTimer = COMBO_TIMEOUT;
+      triggerComboMilestone(meteor.x, meteor.y);
       game.screenShake = Math.min(game.screenShake + 3, 10);
       if (game.combo > 2) playCombo(game.combo);
       maybeSpawnPowerUp(meteor.x, meteor.y, powerupsRef.current, cfg.powerUpDropChance);
@@ -453,7 +470,7 @@ export default function MeteorSplitGame() {
       void saveYouTubeProgress();
       setScreen('gameover');
     }
-  }, [triggerSpecialEvent, gameMode, refreshUnlocks, updateMissionProgress]);
+  }, [addParticles, addShockwave, triggerSpecialEvent, triggerAchievementCheck, triggerComboMilestone, gameMode, refreshUnlocks, updateMissionProgress]);
 
   const collectPowerUp = useCallback((pu: PowerUp) => {
     const game = gameRef.current;
@@ -468,7 +485,7 @@ export default function MeteorSplitGame() {
       case 'score_multi': game.scoreMultiTimer = POWERUP_DURATION; game.scoreMultiplier = 3; break;
     }
     triggerAchievementCheck();
-  }, [triggerAchievementCheck]);
+  }, [addParticles, triggerAchievementCheck]);
 
   const activatePulse = useCallback(() => {
     const game = gameRef.current;
@@ -494,7 +511,7 @@ export default function MeteorSplitGame() {
     addShockwave(viewportRef.current.width / 2, viewportRef.current.height / 2, 190, Math.hypot(viewportRef.current.width, viewportRef.current.height) * 0.68, 850, 6);
     hapticPowerUp();
     updateMissionProgress();
-  }, [updateMissionProgress]);
+  }, [addParticles, addShockwave, updateMissionProgress]);
 
   const startGame = useCallback((mode: GameMode = 'classic') => {
     const game = gameRef.current;
@@ -534,6 +551,7 @@ export default function MeteorSplitGame() {
     meteorsRef.current = [];
     particlesRef.current = [];
     shockwavesRef.current = [];
+    combatTextRef.current = [];
     powerupsRef.current = [];
     spawnTimerRef.current = 0;
     showerTimerRef.current = 0;
@@ -817,6 +835,13 @@ export default function MeteorSplitGame() {
         if (wave.life <= 0) shockwavesRef.current.splice(i, 1);
       }
 
+      for (let i = combatTextRef.current.length - 1; i >= 0; i--) {
+        const text = combatTextRef.current[i];
+        text.life -= rawDt;
+        if (!reducedMotion) text.y -= Math.min(1.2, rawDt * 0.0012);
+        if (text.life <= 0) combatTextRef.current.splice(i, 1);
+      }
+
       // === DRAW ===
       const shake = reducedMotion ? 0 : game.screenShake;
       const sx = shake > 0.5 ? (Math.random() - 0.5) * shake : 0;
@@ -1013,6 +1038,20 @@ export default function MeteorSplitGame() {
         ctx.restore();
       }
 
+      for (const text of combatTextRef.current) {
+        const progress = 1 - text.life / text.maxLife;
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, text.life / 220);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `700 ${Math.round(13 + (reducedMotion ? 0 : Math.sin(progress * Math.PI) * 3))}px system-ui, sans-serif`;
+        ctx.fillStyle = `hsl(${mapHue(text.hue, accessibility.colorBlindMode)}, 95%, 78%)`;
+        ctx.shadowColor = `hsla(${text.hue}, 100%, 60%, 0.8)`;
+        ctx.shadowBlur = 16;
+        ctx.fillText(text.text, text.x, text.y - progress * 24);
+        ctx.restore();
+      }
+
       for (const p of particlesRef.current) {
         const alpha = p.life;
         if (p.type === 'chaos') {
@@ -1076,6 +1115,7 @@ export default function MeteorSplitGame() {
         meteors: meteorsRef.current.map(({ x, y, radius, generation, isBoss, bossHp, bossShield }) => ({ x, y, radius, generation, isBoss, bossHp, bossShield })),
         powerups: powerupsRef.current.map(({ x, y, type, life }) => ({ x, y, type, life })),
         shockwaves: shockwavesRef.current.map(({ x, y, life, maxLife, maxRadius }) => ({ x, y, progress: 1 - life / maxLife, maxRadius })),
+        combatText: combatTextRef.current.map(({ x, y, text, life }) => ({ x, y, text, life })),
       });
     };
     window.advanceTime = (milliseconds: number) => {

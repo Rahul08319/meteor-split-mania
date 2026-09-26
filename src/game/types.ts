@@ -45,6 +45,15 @@ export interface Shockwave {
   width: number;
 }
 
+export interface CombatText {
+  x: number;
+  y: number;
+  text: string;
+  life: number;
+  maxLife: number;
+  hue: number;
+}
+
 export interface Star {
   x: number;
   y: number;
