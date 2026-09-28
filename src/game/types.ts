@@ -13,6 +13,7 @@ export interface Meteor {
   tapCount: number;
   vertices: number[];
   trail: { x: number; y: number; age: number }[];
+  coreType?: 'nova' | 'stabilizer';
   isBoss?: boolean;
   bossHp?: number;
   bossMaxHp?: number;

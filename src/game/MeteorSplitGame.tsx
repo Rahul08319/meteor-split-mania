@@ -68,6 +68,7 @@ const createMeteor = (x: number, y: number, gen: number, canvasW: number, canvas
     tapCount: 0,
     vertices: createVertices(8 + Math.floor(Math.random() * 5)),
     trail: [],
+    coreType: gen < 2 && Math.random() < 0.11 ? (Math.random() < 0.5 ? 'nova' : 'stabilizer') : undefined,
   };
 };
 
@@ -283,6 +284,22 @@ export default function MeteorSplitGame() {
     if (combatTextRef.current.length > 6) combatTextRef.current.shift();
   }, [addParticles, addShockwave]);
 
+  const collectMeteorCore = useCallback((meteor: Meteor, x: number, y: number) => {
+    const game = gameRef.current;
+    const core = meteor.coreType;
+    if (!core) return;
+    meteor.coreType = undefined;
+    const isNova = core === 'nova';
+    const score = Math.round((isNova ? 250 : 150) * game.scoreMultiplier * diffConfigRef.current.scoreMultiplier);
+    game.score += score;
+    if (isNova) game.pulseCooldown = Math.max(0, game.pulseCooldown - 2500);
+    else game.chaosLevel = Math.max(0, game.chaosLevel - 0.16);
+    addParticles(x, y, 24, isNova ? 200 : 145, 'spark');
+    addShockwave(x, y, isNova ? 200 : 145, meteor.radius * 2.8, 540, 4);
+    combatTextRef.current.push({ x, y, text: isNova ? `NOVA CORE  +${score}` : `STABILIZER  +${score}`, life: 1050, maxLife: 1050, hue: isNova ? 200 : 145 });
+    if (combatTextRef.current.length > 6) combatTextRef.current.shift();
+  }, [addParticles, addShockwave]);
+
   const triggerSpecialEvent = useCallback((w: number, h: number) => {
     const game = gameRef.current;
     const cfg = diffConfigRef.current;
@@ -355,6 +372,7 @@ export default function MeteorSplitGame() {
       return;
     }
 
+    collectMeteorCore(meteor, tapX, tapY);
     meteor.tapCount++;
     const mult = game.scoreMultiplier * cfg.scoreMultiplier * (dailyModRef.current?.bonusScoreMult ?? 1);
     addShockwave(tapX, tapY, skin.particleHue, Math.max(48, meteor.radius * 2.1), 360, 2.5);
@@ -470,7 +488,7 @@ export default function MeteorSplitGame() {
       void saveYouTubeProgress();
       setScreen('gameover');
     }
-  }, [addParticles, addShockwave, triggerSpecialEvent, triggerAchievementCheck, triggerComboMilestone, gameMode, refreshUnlocks, updateMissionProgress]);
+  }, [addParticles, addShockwave, collectMeteorCore, triggerSpecialEvent, triggerAchievementCheck, triggerComboMilestone, gameMode, refreshUnlocks, updateMissionProgress]);
 
   const collectPowerUp = useCallback((pu: PowerUp) => {
     const game = gameRef.current;
@@ -982,6 +1000,24 @@ export default function MeteorSplitGame() {
           ctx.lineWidth = 1.5;
           ctx.stroke();
 
+          if (m.coreType) {
+            const coreHue = m.coreType === 'nova' ? 200 : 145;
+            const corePulse = reducedMotion ? 1 : 0.82 + Math.sin(now * 0.008 + m.id.length) * 0.18;
+            const coreGlow = ctx.createRadialGradient(0, 0, 0, 0, 0, m.radius * 1.25 * corePulse);
+            coreGlow.addColorStop(0, `hsla(${coreHue}, 100%, 78%, 0.78)`);
+            coreGlow.addColorStop(0.35, `hsla(${coreHue}, 95%, 60%, 0.42)`);
+            coreGlow.addColorStop(1, 'transparent');
+            ctx.fillStyle = coreGlow;
+            ctx.fillRect(-m.radius * 1.3, -m.radius * 1.3, m.radius * 2.6, m.radius * 2.6);
+            ctx.beginPath();
+            ctx.arc(0, 0, m.radius * 0.23 * corePulse, 0, Math.PI * 2);
+            ctx.fillStyle = `hsl(${coreHue}, 95%, 72%)`;
+            ctx.fill();
+            ctx.strokeStyle = `hsla(${coreHue}, 100%, 94%, 0.95)`;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
+
           for (let i = 0; i < 3; i++) {
             const cx2 = Math.sin(i * 2.1 + m.id.charCodeAt(1)) * m.radius * 0.4;
             const cy2 = Math.cos(i * 3.7 + m.id.charCodeAt(1)) * m.radius * 0.4;
@@ -1112,7 +1148,7 @@ export default function MeteorSplitGame() {
         combo: game.combo,
         pulseCooldown: game.pulseCooldown,
         missions: missionsRef.current.map(({ id, progress, target, complete }) => ({ id, progress, target, complete })),
-        meteors: meteorsRef.current.map(({ x, y, radius, generation, isBoss, bossHp, bossShield }) => ({ x, y, radius, generation, isBoss, bossHp, bossShield })),
+        meteors: meteorsRef.current.map(({ x, y, radius, generation, isBoss, bossHp, bossShield, coreType }) => ({ x, y, radius, generation, isBoss, bossHp, bossShield, coreType })),
         powerups: powerupsRef.current.map(({ x, y, type, life }) => ({ x, y, type, life })),
         shockwaves: shockwavesRef.current.map(({ x, y, life, maxLife, maxRadius }) => ({ x, y, progress: 1 - life / maxLife, maxRadius })),
         combatText: combatTextRef.current.map(({ x, y, text, life }) => ({ x, y, text, life })),
@@ -1161,12 +1197,12 @@ export default function MeteorSplitGame() {
 
       {/* HUD */}
       {screen === 'playing' && !gameRef.current.gameOver && (
-        <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-4 pointer-events-none z-10">
-          <div className="flex flex-col gap-1">
-            <div className="font-display text-2xl font-bold text-glow" style={{ color: 'hsl(var(--primary))' }}>
+        <div className="run-hud absolute top-0 left-0 right-0 flex justify-between items-start p-4 pointer-events-none z-10">
+          <div className="run-hud-score flex flex-col gap-1">
+            <div className="run-score-value font-display text-2xl font-bold text-glow" style={{ color: 'hsl(var(--primary))' }}>
               {uiState.score.toLocaleString()}
             </div>
-            <div className="font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>
+            <div className="run-hud-meta font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>
               Level {uiState.level} • {uiState.biome} {gameMode === 'daily' && '• DAILY'} {gameMode === 'weekly' && '• WEEKLY'}
             </div>
             {uiState.scoreMult && (
@@ -1179,13 +1215,13 @@ export default function MeteorSplitGame() {
             )}
           </div>
           {uiState.combo > 1 && (
-            <div className="font-display text-lg font-bold text-glow-blue animate-pulse" style={{ color: 'hsl(var(--secondary))' }}>
+            <div className="run-combo font-display text-lg font-bold text-glow-blue animate-pulse" style={{ color: 'hsl(var(--secondary))' }}>
               {uiState.combo}x COMBO
             </div>
           )}
-          <div className="flex flex-col items-end gap-1">
-            <div className="font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Chaos</div>
-            <div className="w-24 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted))' }}>
+          <div className="run-chaos flex flex-col items-end gap-1">
+            <div className="run-hud-meta font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Chaos</div>
+            <div className="run-chaos-track w-24 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted))' }}>
               <div className="h-full rounded-full transition-all duration-200" style={{
                 width: `${uiState.chaos * 100}%`,
                 backgroundColor: uiState.chaos > CHAOS_THRESHOLD ? 'hsl(var(--accent))' : 'hsl(var(--primary))',
@@ -1198,7 +1234,7 @@ export default function MeteorSplitGame() {
 
       {screen === 'playing' && (
         <>
-          <div className="absolute bottom-5 left-4 z-10 pointer-events-none space-y-1">
+          <div className="run-missions absolute bottom-5 left-4 z-10 pointer-events-none space-y-1">
             {missions.map(mission => (
               <div key={mission.id} className="font-body text-[10px] rounded-full px-2 py-1" style={{
                 backgroundColor: 'hsl(var(--card) / 0.76)',
@@ -1331,12 +1367,16 @@ export default function MeteorSplitGame() {
 
       {/* Game Over */}
       {screen === 'gameover' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-          <div className="px-8 py-10 rounded-2xl text-center" style={{ ...panelStyle, backgroundColor: 'hsl(var(--card) / 0.9)' }}>
-            <h2 className="font-display text-4xl font-black mb-2" style={{ color: 'hsl(var(--accent))' }}>CHAOS OVERLOAD</h2>
+        <div className="gameover-screen absolute inset-0 flex flex-col items-center justify-center z-20 overflow-auto p-4">
+          <div className="gameover-card w-full max-w-md px-6 py-7 sm:px-8 sm:py-9 rounded-2xl text-center" style={{ ...panelStyle, backgroundColor: 'hsl(var(--card) / 0.9)' }}>
+            <div className="gameover-kicker">RUN TERMINATED · FIELD STABILIZED</div>
+            <h2 className="font-display text-3xl sm:text-4xl font-black mb-2" style={{ color: 'hsl(var(--accent))' }}>CHAOS OVERLOAD</h2>
             {gameMode === 'daily' && <div className="font-display text-xs mb-2" style={{ color: 'hsl(var(--secondary))' }}>📅 DAILY CHALLENGE</div>}
             {gameMode === 'weekly' && <div className="font-display text-xs mb-2" style={{ color: 'hsl(var(--secondary))' }}>🛰 WEEKLY GAUNTLET</div>}
-            <div className="font-display text-5xl font-bold text-glow my-4" style={{ color: 'hsl(var(--primary))' }}>{uiState.score.toLocaleString()}</div>
+            <div className="gameover-score-wrap my-4">
+              <div className="gameover-score-label">FINAL SCORE</div>
+              <div className="font-display text-5xl font-bold text-glow" style={{ color: 'hsl(var(--primary))' }}>{uiState.score.toLocaleString()}</div>
+            </div>
             <p className="font-body text-sm mb-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
               Level {uiState.level} • {gameRef.current.maxCombo > 0 ? `Best combo: ${gameRef.current.maxCombo}x` : ''}
               {gameRef.current.bossDefeated > 0 ? ` • Bosses: ${gameRef.current.bossDefeated}` : ''}
@@ -1358,7 +1398,7 @@ export default function MeteorSplitGame() {
             {uiState.score >= uiState.highScore && uiState.score > 0 && (
               <p className="font-display text-sm mt-2" style={{ color: 'hsl(var(--score-gold))' }}>★ NEW HIGH SCORE ★</p>
             )}
-            <div className="font-display text-base mt-6 animate-pulse" style={{ color: 'hsl(var(--foreground))' }}>TAP TO CONTINUE</div>
+            <button type="button" className="gameover-continue font-display text-sm mt-6" onClick={() => setScreen('title')}>RETURN TO HANGAR <span aria-hidden="true">↗</span></button>
           </div>
         </div>
       )}

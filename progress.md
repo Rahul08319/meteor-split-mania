@@ -26,3 +26,14 @@ Original prompt: Make Meteor Split Mania more realistic and aesthetic; create SD
 - Verified with `npm run build`, `git diff --check`, and the focused Vitest file (`src/test/example.test.ts`, 1 passing test).
 - Added combo Resonance rewards every fifth consecutive meteor destroyed: bonus score, a small chaos reduction, and a 1.5-second Nova Pulse cooldown reduction, with animated in-game feedback.
 - Re-verified the production build, focused game-file ESLint, and the existing Vitest file (1 passing test).
+
+## 2026-09-29 — Resonant meteor cores
+- Added rare Nova and Stabilizer cores to large and medium meteors. Nova cores award score and restore 2.5 seconds of Nova Pulse cooldown; Stabilizer cores award score and reduce chaos by 0.16.
+- Core meteors have a distinct animated canvas glow and their live core type is included in `render_game_to_text`.
+- Focused ESLint for the modified game files passes. The skill-prescribed Playwright client remains unavailable because the repository has no Playwright dependency.
+
+## 2026-09-27 — In-run HUD and end-of-run polish
+- Carried the observatory cockpit language into gameplay telemetry: framed score/chaos panels, a legible combo chip, safe-area-aware spacing, and a compact mission stack that avoids the playfield center.
+- Reworked the end-of-run overlay into a framed score recap and made the return-to-hangar call to action an actual button.
+- The prescribed web-game Playwright client could not launch because `playwright` is not installed for the skill script; no dependency was added. CUA browser inspection timed out, and the prior local server on port 8082 was not running.
+- Next: if visual QA is needed, start the game locally and capture active gameplay plus the game-over screen once a Playwright runtime is available.
