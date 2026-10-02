@@ -16,7 +16,7 @@ import CloudSyncPanel from '@/components/CloudSyncPanel';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { CalendarDays, CircleHelp, Palette, Settings2, Trophy } from 'lucide-react';
-import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, logYTError } from './youtubePlayables';
+import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, logYTError, showInterstitialAd, showRewardedAd, REWARD_IDS, inPlayablesEnv } from './youtubePlayables';
 import { createRunMissions, RunMission, updateRunMissions } from './missions';
 import { addWeeklyEntry, getWeeklyAttempts, getWeeklyBestScore, getWeeklyLeaderboard, getWeeklyModifiers, getWeekKey } from './weekly';
 import { createWebGLBackdrop, WebGLBackdrop } from './webglBackdrop';
@@ -486,6 +486,7 @@ export default function MeteorSplitGame() {
       refreshUnlocks();
       addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 50, 0, 'chaos');
       void saveYouTubeProgress();
+      void showInterstitialAd();
       setScreen('gameover');
     }
   }, [addParticles, addShockwave, collectMeteorCore, triggerSpecialEvent, triggerAchievementCheck, triggerComboMilestone, gameMode, refreshUnlocks, updateMissionProgress]);
@@ -556,7 +557,13 @@ export default function MeteorSplitGame() {
     game.combo = 0;
     game.comboTimer = 0;
     game.maxCombo = 0;
-    game.slowmoTimer = 0;
+    const hasSlowMoReward = localStorage.getItem('meteorSplit_pendingSlowMo') === '1';
+    if (hasSlowMoReward) {
+      localStorage.removeItem('meteorSplit_pendingSlowMo');
+      game.slowmoTimer = 8000;
+    } else {
+      game.slowmoTimer = 0;
+    }
     game.scoreMultiTimer = 0;
     game.scoreMultiplier = 1;
     game.specialEvent = null;
@@ -1182,10 +1189,35 @@ export default function MeteorSplitGame() {
     };
   }, [handleTap, initStars]);
 
-  // Helper for panel styling
-  const panelStyle = { backgroundColor: 'hsl(var(--card) / 0.95)', backdropFilter: 'blur(20px)' };
-  const btnPrimary = { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' };
-  const btnSecondary = { backgroundColor: 'hsl(var(--card))', color: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))' };
+  // Apple-grade Liquid Glass panel and tactile spring button helpers
+  const panelStyle = {
+    background: 'linear-gradient(145deg, rgba(26, 28, 42, 0.82) 0%, rgba(12, 14, 24, 0.92) 100%)',
+    backdropFilter: 'blur(36px) saturate(200%) contrast(105%)',
+    WebkitBackdropFilter: 'blur(36px) saturate(200%) contrast(105%)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.25), 0 28px 56px -12px rgba(0, 0, 0, 0.75)',
+    borderRadius: '24px',
+  };
+  const btnPrimary = {
+    background: 'linear-gradient(180deg, #FF9F0A 0%, #FF8000 100%)',
+    color: '#FFFFFF',
+    border: '1px solid rgba(255, 255, 255, 0.28)',
+    boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 8px 20px -4px rgba(255, 149, 0, 0.45)',
+    borderRadius: '14px',
+    fontWeight: '600',
+    transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease',
+  };
+  const btnSecondary = {
+    background: 'rgba(255, 255, 255, 0.08)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    color: '#E5E5EA',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    boxShadow: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.12), 0 4px 12px rgba(0, 0, 0, 0.25)',
+    borderRadius: '14px',
+    fontWeight: '500',
+    transition: 'transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease',
+  };
 
   const dailyMod = getDailyModifiers();
   const weeklyMod = getWeeklyModifiers();
@@ -1195,15 +1227,15 @@ export default function MeteorSplitGame() {
       <canvas ref={backdropCanvasRef} aria-hidden="true" className="absolute inset-0 w-full h-full pointer-events-none" />
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
-      {/* HUD */}
+      {/* HUD - Apple Dynamic Island style translucent chips */}
       {screen === 'playing' && !gameRef.current.gameOver && (
-        <div className="run-hud absolute top-0 left-0 right-0 flex justify-between items-start p-4 pointer-events-none z-10">
-          <div className="run-hud-score flex flex-col gap-1">
-            <div className="run-score-value font-display text-2xl font-bold text-glow" style={{ color: 'hsl(var(--primary))' }}>
+        <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-4 pointer-events-none z-10">
+          <div className="flex flex-col gap-1 apple-glass-pill px-4 py-2 pointer-events-auto">
+            <div className="font-display text-2xl font-black text-glow" style={{ color: 'hsl(var(--primary))' }}>
               {uiState.score.toLocaleString()}
             </div>
-            <div className="run-hud-meta font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>
-              Level {uiState.level} • {uiState.biome} {gameMode === 'daily' && '• DAILY'} {gameMode === 'weekly' && '• WEEKLY'}
+            <div className="font-body text-[11px] font-semibold tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>
+              LEVEL {uiState.level} • {uiState.biome} {gameMode === 'daily' && '• DAILY'} {gameMode === 'weekly' && '• WEEKLY'}
             </div>
             {uiState.scoreMult && (
               <div className="font-display text-xs font-bold" style={{ color: 'hsl(var(--score-gold))' }}>
@@ -1215,17 +1247,25 @@ export default function MeteorSplitGame() {
             )}
           </div>
           {uiState.combo > 1 && (
-            <div className="run-combo font-display text-lg font-bold text-glow-blue animate-pulse" style={{ color: 'hsl(var(--secondary))' }}>
+            <div className="font-display text-base font-extrabold text-glow-blue apple-glass-pill px-3 py-1.5 animate-pulse" style={{ color: 'hsl(var(--secondary))' }}>
               {uiState.combo}x COMBO
             </div>
           )}
-          <div className="run-chaos flex flex-col items-end gap-1">
-            <div className="run-hud-meta font-body text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Chaos</div>
-            <div className="run-chaos-track w-24 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'hsl(var(--muted))' }}>
-              <div className="h-full rounded-full transition-all duration-200" style={{
+          <div className="flex flex-col items-end gap-1 apple-glass-pill px-3 py-2 pointer-events-auto">
+            <div className="font-body text-[10px] font-bold uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Chaos Meter</div>
+            <div className="w-28 h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255, 255, 255, 0.12)' }}>
+              <div className="h-full rounded-full transition-all duration-300" style={{
                 width: `${uiState.chaos * 100}%`,
-                backgroundColor: uiState.chaos > CHAOS_THRESHOLD ? 'hsl(var(--accent))' : 'hsl(var(--primary))',
-                boxShadow: uiState.chaos > CHAOS_THRESHOLD ? '0 0 10px hsl(var(--accent) / 0.7)' : 'none',
+                background: uiState.chaos > CHAOS_THRESHOLD ? 'linear-gradient(90deg, #FF9500, #FF3B30)' : 'linear-gradient(90deg, #5AC8FA, #FF9500)',
+                boxShadow: uiState.chaos > CHAOS_THRESHOLD ? '0 0 12px rgba(255, 59, 48, 0.8)' : 'none',
+              }} />
+            </div>
+          </div>
+        </div>
+      )}
+                width: `${uiState.chaos * 100}%`,
+                background: uiState.chaos > CHAOS_THRESHOLD ? 'linear-gradient(90deg, #FF9500, #FF3B30)' : 'linear-gradient(90deg, #5AC8FA, #FF9500)',
+                boxShadow: uiState.chaos > CHAOS_THRESHOLD ? '0 0 12px rgba(255, 59, 48, 0.8)' : 'none',
               }} />
             </div>
           </div>
@@ -1234,19 +1274,22 @@ export default function MeteorSplitGame() {
 
       {screen === 'playing' && (
         <>
-          <div className="run-missions absolute bottom-5 left-4 z-10 pointer-events-none space-y-1">
+          <div className="absolute bottom-5 left-4 z-10 pointer-events-none space-y-1.5">
             {missions.map(mission => (
-              <div key={mission.id} className="font-body text-[10px] rounded-full px-2 py-1" style={{
-                backgroundColor: 'hsl(var(--card) / 0.76)',
+              <div key={mission.id} className="font-body text-[11px] font-medium apple-glass-pill px-3 py-1" style={{
                 color: mission.complete ? 'hsl(var(--score-gold))' : 'hsl(var(--muted-foreground))',
               }}>{mission.complete ? '✓' : mission.icon} {mission.progress.toLocaleString()}/{mission.target.toLocaleString()} {mission.title}</div>
             ))}
           </div>
-          <button aria-label="Activate Nova Pulse" className="nova-pulse absolute bottom-5 right-4 z-20 w-16 h-16 rounded-full font-display text-[10px] font-bold pointer-events-auto transition-all" style={{
-            backgroundColor: uiState.pulseCooldown <= 0 ? 'hsl(190, 85%, 45% / 0.92)' : 'hsl(var(--muted) / 0.88)',
-            color: 'hsl(var(--foreground))',
-            border: `2px solid ${uiState.pulseCooldown <= 0 ? 'hsl(190, 95%, 75%)' : 'hsl(var(--border))'}`,
-            boxShadow: uiState.pulseCooldown <= 0 ? '0 0 18px hsl(190, 90%, 60% / 0.65)' : 'none',
+          <button aria-label="Activate Nova Pulse" className="apple-spring absolute bottom-6 right-5 z-20 w-16 h-16 rounded-full font-display text-[10px] font-bold pointer-events-auto flex items-center justify-center text-center" style={{
+            background: uiState.pulseCooldown <= 0 ? 'linear-gradient(135deg, rgba(0, 190, 255, 0.95), rgba(0, 122, 255, 0.95))' : 'rgba(30, 32, 45, 0.85)',
+            backdropFilter: 'blur(20px)',
+            color: '#FFFFFF',
+            border: `2px solid ${uiState.pulseCooldown <= 0 ? 'rgba(180, 235, 255, 0.9)' : 'rgba(255, 255, 255, 0.14)'}`,
+            boxShadow: uiState.pulseCooldown <= 0 ? '0 0 24px rgba(0, 160, 255, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4)' : 'none',
+          }} onClick={(event) => { event.stopPropagation(); activatePulse(); }}>
+            {uiState.pulseCooldown <= 0 ? 'NOVA\nPULSE' : `${Math.ceil(uiState.pulseCooldown / 1000)}s`}
+          </button>
           }} onClick={(event) => { event.stopPropagation(); activatePulse(); }}>
             {uiState.pulseCooldown <= 0 ? 'NOVA\nPULSE' : `${Math.ceil(uiState.pulseCooldown / 1000)}s`}
           </button>
@@ -1324,17 +1367,16 @@ export default function MeteorSplitGame() {
           <h2 className="title-wordmark-accent font-display text-3xl md:text-5xl font-bold text-glow-blue mb-3 tracking-[0.13em]" style={{ color: 'hsl(var(--secondary))' }}>SPLIT MANIA</h2>
           <p className="title-subtitle font-body text-sm mb-5" style={{ color: 'hsl(var(--muted-foreground))' }}>Tap. Split. Survive the chaos.</p>
 
-          {/* Difficulty selector */}
-          <div className="flex gap-2 mb-5 justify-center">
+          {/* Apple-style Segmented Difficulty selector */}
+          <div className="inline-flex p-1.5 rounded-2xl bg-black/40 backdrop-blur-md border border-white/10 mb-5 justify-center gap-1.5 shadow-inner">
             {(['easy', 'normal', 'hard'] as Difficulty[]).map(d => {
               const cfg = DIFFICULTY_CONFIGS[d];
               const active = difficulty === d;
               return (
-                <button key={d} className="font-display text-xs px-4 py-2 rounded-lg pointer-events-auto transition-all" style={{
-                  backgroundColor: active ? 'hsl(var(--primary))' : 'hsl(var(--card))',
-                  color: active ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))',
-                  border: `1px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
-                  transform: active ? 'scale(1.05)' : 'scale(1)',
+                <button key={d} className="apple-spring font-display text-xs px-4 py-2 rounded-xl pointer-events-auto transition-all font-semibold" style={{
+                  background: active ? 'linear-gradient(180deg, #FF9F0A 0%, #FF8000 100%)' : 'transparent',
+                  color: active ? '#FFFFFF' : 'rgba(255, 255, 255, 0.65)',
+                  boxShadow: active ? '0 4px 14px rgba(255, 149, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3)' : 'none',
                 }} onClick={(e) => { e.stopPropagation(); setDifficulty(d); }}>
                   {cfg.icon} {cfg.label}
                 </button>
@@ -1342,63 +1384,102 @@ export default function MeteorSplitGame() {
             })}
           </div>
 
-          <p className="title-rule font-body text-xs mb-5 tracking-[0.12em]" style={{ color: 'hsl(var(--accent))' }}>PRECISION OVER PANIC</p>
+          <p className="title-rule font-body text-xs mb-5 tracking-[0.12em]" style={{ color: 'hsl(var(--accent))' }}>⚠ PRECISION OVER PANIC — OVER-TAPPING CREATES CHAOS</p>
 
           <button type="button" className="title-start font-display text-base cursor-pointer mb-3" onClick={enterClassicFromTitle}>
             TAP TO START
           </button>
 
           {uiState.highScore > 0 && (
-            <div className="font-body text-sm mb-4" style={{ color: 'hsl(var(--score-gold))' }}>Best: {uiState.highScore.toLocaleString()}</div>
+            <div className="font-body text-sm mb-4 font-semibold" style={{ color: 'hsl(var(--score-gold))' }}>Best: {uiState.highScore.toLocaleString()}</div>
           )}
 
           <div className="title-nav">
-            <button className="title-nav-item" onClick={() => setScreen('daily')}><CalendarDays size={17} strokeWidth={1.6} /><span>DAILY</span></button>
-            <button className="title-nav-item" onClick={() => setScreen('weekly')}><CalendarDays size={17} strokeWidth={1.6} /><span>WEEKLY</span></button>
-            <button className="title-nav-item" onClick={() => setScreen('leaderboard')}><Trophy size={17} strokeWidth={1.6} /><span>SCORES</span></button>
-            <button className="title-nav-item" onClick={() => { refreshUnlocks(); setScreen('skins'); }}><Palette size={17} strokeWidth={1.6} /><span>SKINS</span></button>
-            <button className="title-nav-item" onClick={() => { setTutorialStep(0); setScreen('tutorial'); }}><CircleHelp size={17} strokeWidth={1.6} /><span>HOW TO</span></button>
-            <button className="title-nav-item" onClick={() => { setSettingsState(getSettings()); setScreen('settings'); }}><Settings2 size={17} strokeWidth={1.6} /><span>SETTINGS</span></button>
+            <button className="title-nav-item apple-spring" onClick={(e) => { e.stopPropagation(); setScreen('daily'); }}><CalendarDays size={17} strokeWidth={1.6} /><span>DAILY</span></button>
+            <button className="title-nav-item apple-spring" onClick={(e) => { e.stopPropagation(); setScreen('weekly'); }}><CalendarDays size={17} strokeWidth={1.6} /><span>WEEKLY</span></button>
+            <button className="title-nav-item apple-spring" onClick={(e) => { e.stopPropagation(); setScreen('leaderboard'); }}><Trophy size={17} strokeWidth={1.6} /><span>SCORES</span></button>
+            <button className="title-nav-item apple-spring" onClick={(e) => { e.stopPropagation(); refreshUnlocks(); setScreen('skins'); }}><Palette size={17} strokeWidth={1.6} /><span>SKINS</span></button>
+            <button className="title-nav-item apple-spring" onClick={(e) => { e.stopPropagation(); setTutorialStep(0); setScreen('tutorial'); }}><CircleHelp size={17} strokeWidth={1.6} /><span>HOW TO</span></button>
+            <button className="title-nav-item apple-spring" onClick={(e) => { e.stopPropagation(); setSettingsState(getSettings()); setScreen('settings'); }}><Settings2 size={17} strokeWidth={1.6} /><span>SETTINGS</span></button>
           </div>
           <div className="title-footer">TAP METEORS TO SPLIT • BUILD COMBOS • SURVIVE THE FIELD</div>
           </div>
         </div>
       )}
 
-      {/* Game Over */}
+      {/* Game Over - Apple Bento Grid Layout */}
       {screen === 'gameover' && (
-        <div className="gameover-screen absolute inset-0 flex flex-col items-center justify-center z-20 overflow-auto p-4">
-          <div className="gameover-card w-full max-w-md px-6 py-7 sm:px-8 sm:py-9 rounded-2xl text-center" style={{ ...panelStyle, backgroundColor: 'hsl(var(--card) / 0.9)' }}>
-            <div className="gameover-kicker">RUN TERMINATED · FIELD STABILIZED</div>
-            <h2 className="font-display text-3xl sm:text-4xl font-black mb-2" style={{ color: 'hsl(var(--accent))' }}>CHAOS OVERLOAD</h2>
-            {gameMode === 'daily' && <div className="font-display text-xs mb-2" style={{ color: 'hsl(var(--secondary))' }}>📅 DAILY CHALLENGE</div>}
-            {gameMode === 'weekly' && <div className="font-display text-xs mb-2" style={{ color: 'hsl(var(--secondary))' }}>🛰 WEEKLY GAUNTLET</div>}
-            <div className="gameover-score-wrap my-4">
-              <div className="gameover-score-label">FINAL SCORE</div>
-              <div className="font-display text-5xl font-bold text-glow" style={{ color: 'hsl(var(--primary))' }}>{uiState.score.toLocaleString()}</div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-20 px-4 overflow-auto py-6">
+          <div className="w-full max-w-md p-7 sm:p-8 rounded-3xl text-center apple-glass">
+            <div className="inline-block text-[11px] font-bold tracking-widest uppercase px-3 py-1 rounded-full mb-2" style={{ backgroundColor: 'rgba(255, 59, 48, 0.15)', color: '#FF3B30', border: '1px solid rgba(255, 59, 48, 0.3)' }}>
+              CHAOS OVERLOAD · FIELD STABILIZED
             </div>
-            <p className="font-body text-sm mb-1" style={{ color: 'hsl(var(--muted-foreground))' }}>
-              Level {uiState.level} • {gameRef.current.maxCombo > 0 ? `Best combo: ${gameRef.current.maxCombo}x` : ''}
+            {gameMode === 'daily' && <div className="font-display text-xs mb-1 font-semibold" style={{ color: 'hsl(var(--secondary))' }}>📅 DAILY CHALLENGE</div>}
+            {gameMode === 'weekly' && <div className="font-display text-xs mb-1 font-semibold" style={{ color: 'hsl(var(--secondary))' }}>🛰 WEEKLY GAUNTLET</div>}
+            <div className="font-display text-5xl font-black text-glow my-3" style={{ color: 'hsl(var(--primary))' }}>{uiState.score.toLocaleString()}</div>
+            <p className="font-body text-xs mb-4" style={{ color: 'hsl(var(--muted-foreground))' }}>
+              Level {uiState.level} • {gameRef.current.maxCombo > 0 ? `Best combo: ${gameRef.current.maxCombo}x` : 'No combo'}
               {gameRef.current.bossDefeated > 0 ? ` • Bosses: ${gameRef.current.bossDefeated}` : ''}
             </p>
-            <div className="grid grid-cols-2 gap-2 mt-4 text-left">
-              <div className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
-                <div className="font-display text-sm" style={{ color: 'hsl(var(--secondary))' }}>{gameRef.current.taps ? Math.round((gameRef.current.hits / gameRef.current.taps) * 100) : 0}%</div>
-                <div className="font-body text-[10px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Tap accuracy</div>
+
+            {/* Bento Grid */}
+            <div className="grid grid-cols-2 gap-2.5 my-4 text-left">
+              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+                <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tap Accuracy</div>
+                <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.taps ? Math.round((gameRef.current.hits / gameRef.current.taps) * 100) : 0}%</div>
               </div>
-              <div className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
-                <div className="font-display text-sm" style={{ color: 'hsl(var(--secondary))' }}>{gameRef.current.meteorsDestroyed}</div>
-                <div className="font-body text-[10px] uppercase" style={{ color: 'hsl(var(--muted-foreground))' }}>Fragments split</div>
+              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+                <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fragments Split</div>
+                <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.meteorsDestroyed}</div>
+              </div>
+              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+                <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Max Combo</div>
+                <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.maxCombo}x</div>
+              </div>
+              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+                <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Bosses Defeated</div>
+                <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.bossDefeated}</div>
               </div>
             </div>
-            <div className="mt-4 text-left space-y-1">
-              <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Run missions</div>
-              {missions.map(mission => <div key={mission.id} className="font-body text-[11px]" style={{ color: mission.complete ? 'hsl(var(--score-gold))' : 'hsl(var(--muted-foreground))' }}>{mission.complete ? '✓' : '○'} {mission.title}: {mission.progress.toLocaleString()}/{mission.target.toLocaleString()}</div>)}
-            </div>
-            {uiState.score >= uiState.highScore && uiState.score > 0 && (
-              <p className="font-display text-sm mt-2" style={{ color: 'hsl(var(--score-gold))' }}>★ NEW HIGH SCORE ★</p>
+
+            {missions.length > 0 && (
+              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 text-left my-3 space-y-1.5">
+                <div className="font-body text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Run Missions</div>
+                {missions.map(mission => (
+                  <div key={mission.id} className="font-body text-xs flex justify-between items-center" style={{ color: mission.complete ? 'hsl(var(--score-gold))' : 'hsl(var(--muted-foreground))' }}>
+                    <span>{mission.complete ? '✓' : '○'} {mission.title}</span>
+                    <span className="font-semibold text-[11px]">{mission.progress.toLocaleString()}/{mission.target.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             )}
-            <button type="button" className="gameover-continue font-display text-sm mt-6" onClick={() => setScreen('title')}>RETURN TO HANGAR <span aria-hidden="true">↗</span></button>
+
+            {uiState.score >= uiState.highScore && uiState.score > 0 && (
+              <div className="inline-flex items-center gap-1.5 font-display text-xs font-bold px-3 py-1.5 rounded-full my-2" style={{ background: 'rgba(255, 204, 0, 0.15)', color: '#FFD60A', border: '1px solid rgba(255, 204, 0, 0.35)' }}>
+                ★ NEW HIGH SCORE ★
+              </div>
+            )}
+
+            {/* Rewarded ad — Apple Action Card */}
+            {inPlayablesEnv() && (
+              <button
+                className="apple-spring w-full font-display text-xs font-semibold px-4 py-3 rounded-2xl mt-3 flex items-center justify-center gap-2 pointer-events-auto"
+                style={{ background: 'linear-gradient(135deg, rgba(90, 200, 250, 0.15) 0%, rgba(0, 122, 255, 0.2) 100%)', color: '#5AC8FA', border: '1px solid rgba(90, 200, 250, 0.35)', boxShadow: '0 4px 16px rgba(0, 122, 255, 0.15)' }}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const earned = await showRewardedAd(REWARD_IDS.SLOW_MO_BOOST);
+                  if (earned) {
+                    localStorage.setItem('meteorSplit_pendingSlowMo', '1');
+                  }
+                }}
+              >
+                <span>📺</span> WATCH AD — EARN 8s SLOW-MO BOOST
+              </button>
+            )}
+
+            <button type="button" className="gameover-continue title-start font-display text-sm font-bold mt-5 w-full py-3 cursor-pointer select-none pointer-events-auto" onClick={() => setScreen('title')}>
+              RETURN TO HANGAR <span aria-hidden="true">↗</span>
+            </button>
           </div>
         </div>
       )}
@@ -1438,11 +1519,11 @@ export default function MeteorSplitGame() {
               </div>
             )}
 
-            <button className="w-full font-display text-sm px-6 py-3 rounded-lg mb-3" style={btnPrimary}
+            <button className="apple-spring w-full font-display text-sm font-semibold px-6 py-3.5 rounded-xl mb-3" style={btnPrimary}
               onClick={() => startGame('daily')}>
               PLAY DAILY CHALLENGE
             </button>
-            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnSecondary}
+            <button className="apple-spring w-full font-display text-sm font-medium px-6 py-3 rounded-xl" style={btnSecondary}
               onClick={() => setScreen('title')}>BACK</button>
           </div>
         </div>
@@ -1479,8 +1560,8 @@ export default function MeteorSplitGame() {
                 </div>
               ))}
             </div>
-            <button className="w-full font-display text-sm px-6 py-3 rounded-lg mb-3" style={btnPrimary} onClick={() => startGame('weekly')}>ENTER WEEKLY GAUNTLET</button>
-            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnSecondary} onClick={() => setScreen('title')}>BACK</button>
+            <button className="apple-spring w-full font-display text-sm font-semibold px-6 py-3.5 rounded-xl mb-3" style={btnPrimary} onClick={() => startGame('weekly')}>ENTER WEEKLY GAUNTLET</button>
+            <button className="apple-spring w-full font-display text-sm font-medium px-6 py-3 rounded-xl" style={btnSecondary} onClick={() => setScreen('title')}>BACK</button>
           </div>
         </div>
       )}
@@ -1543,7 +1624,7 @@ export default function MeteorSplitGame() {
               })}
             </div>
 
-            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnPrimary}
+            <button className="apple-spring w-full font-display text-sm font-semibold px-6 py-3.5 rounded-xl" style={btnPrimary}
               onClick={() => setScreen('title')}>BACK</button>
           </div>
         </div>
@@ -1564,7 +1645,7 @@ export default function MeteorSplitGame() {
                   { label: 'Top Lvl', value: stats.bestLevel },
                   { label: 'Best Combo', value: `${stats.bestCombo}x` },
                 ].map((s, i) => (
-                  <div key={i} className="rounded-lg p-2" style={{ backgroundColor: 'hsl(var(--muted) / 0.5)' }}>
+                  <div key={i} className="rounded-xl p-2.5 bg-white/5 border border-white/10 backdrop-blur-md">
                     <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--secondary))' }}>{s.value}</div>
                     <div className="font-body text-[10px] uppercase tracking-wider" style={{ color: 'hsl(var(--muted-foreground))' }}>{s.label}</div>
                   </div>
@@ -1574,9 +1655,9 @@ export default function MeteorSplitGame() {
             {leaderboard.length === 0 ? (
               <p className="font-body text-sm text-center" style={{ color: 'hsl(var(--muted-foreground))' }}>No games yet. Play to set a score!</p>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 {leaderboard.slice(0, 10).map((entry, i) => (
-                  <div key={i} className="flex items-center justify-between rounded-lg px-3 py-2" style={{ backgroundColor: i < 3 ? 'hsl(var(--muted) / 0.6)' : 'transparent' }}>
+                  <div key={i} className="flex items-center justify-between rounded-xl px-3.5 py-2.5 bg-white/5 border border-white/5" style={{ backgroundColor: i < 3 ? 'rgba(255, 255, 255, 0.08)' : 'transparent' }}>
                     <div className="flex items-center gap-3">
                       <span className="font-display text-sm w-6 text-center" style={{
                         color: i === 0 ? 'hsl(var(--score-gold))' : i === 1 ? 'hsl(210, 20%, 70%)' : i === 2 ? 'hsl(25, 60%, 55%)' : 'hsl(var(--muted-foreground))',
@@ -1591,7 +1672,7 @@ export default function MeteorSplitGame() {
                 ))}
               </div>
             )}
-            <button className="mt-6 w-full font-display text-sm px-6 py-3 rounded-lg" style={btnPrimary}
+            <button className="apple-spring mt-6 w-full font-display text-sm font-semibold px-6 py-3.5 rounded-xl" style={btnPrimary}
               onClick={() => setScreen('title')}>BACK</button>
           </div>
         </div>
@@ -1612,7 +1693,7 @@ export default function MeteorSplitGame() {
                   { id: 'calm', label: 'Calm', settings: { reducedMotion: true, highContrast: true, colorBlindMode: 'off' as const, uiScale: 1.1 } },
                 ].map(preset => {
                   const active = settingsState.reducedMotion === preset.settings.reducedMotion && settingsState.highContrast === preset.settings.highContrast && settingsState.colorBlindMode === preset.settings.colorBlindMode && settingsState.uiScale === preset.settings.uiScale;
-                  return <button key={preset.id} className="rounded-lg px-2 py-2 font-display text-[10px]" style={{ backgroundColor: active ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--muted) / 0.45)', color: active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))', border: `1px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}` }} onClick={() => { setSettings(preset.settings); applyUiScale(preset.settings.uiScale); setSettingsState(getSettings()); }}>{preset.label}</button>;
+                  return <button key={preset.id} className="apple-spring rounded-xl px-2 py-2.5 font-display text-[11px] font-semibold" style={{ backgroundColor: active ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--muted) / 0.45)', color: active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))', border: `1px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}` }} onClick={() => { setSettings(preset.settings); applyUiScale(preset.settings.uiScale); setSettingsState(getSettings()); }}>{preset.label}</button>;
                 })}
               </div>
               <p className="font-body text-[10px] mt-2" style={{ color: 'hsl(var(--muted-foreground))' }}>Focus enlarges UI and boosts contrast. Calm reduces flashing and motion.</p>
@@ -1621,7 +1702,7 @@ export default function MeteorSplitGame() {
             <div className="mb-6">
               <div className="flex justify-between mb-2">
                 <span className="font-display text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>SFX Volume</span>
-                <span className="font-display text-xs" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.sfxVolume * 100)}%</span>
+                <span className="font-display text-xs font-semibold" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.sfxVolume * 100)}%</span>
               </div>
               <Slider value={[settingsState.sfxVolume * 100]} max={100} step={1}
                 onValueChange={(v) => {
@@ -1635,7 +1716,7 @@ export default function MeteorSplitGame() {
             <div className="mb-6">
               <div className="flex justify-between mb-2">
                 <span className="font-display text-xs uppercase tracking-widest" style={{ color: 'hsl(var(--muted-foreground))' }}>Music Volume</span>
-                <span className="font-display text-xs" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.musicVolume * 100)}%</span>
+                <span className="font-display text-xs font-semibold" style={{ color: 'hsl(var(--secondary))' }}>{Math.round(settingsState.musicVolume * 100)}%</span>
               </div>
               <Slider value={[settingsState.musicVolume * 100]} max={100} step={1}
                 onValueChange={(v) => {
@@ -1646,7 +1727,7 @@ export default function MeteorSplitGame() {
                 }} />
             </div>
 
-            <div className="flex items-center justify-between mb-8 rounded-lg p-3" style={{ backgroundColor: 'hsl(var(--muted) / 0.4)' }}>
+            <div className="flex items-center justify-between mb-8 rounded-xl p-3.5 bg-white/5 border border-white/10">
               <div>
                 <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--foreground))' }}>Haptic Feedback</div>
                 <div className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>Vibrate on mobile devices</div>
@@ -1662,9 +1743,9 @@ export default function MeteorSplitGame() {
               {ACHIEVEMENTS.map(a => {
                 const unlocked = allUnlocked.includes(a.id);
                 return (
-                  <div key={a.id} className="rounded-lg p-2" style={{
-                    backgroundColor: unlocked ? 'hsl(var(--primary) / 0.15)' : 'hsl(var(--muted) / 0.3)',
-                    border: `1px solid ${unlocked ? 'hsl(var(--primary) / 0.4)' : 'hsl(var(--border))'}`,
+                  <div key={a.id} className="rounded-xl p-2.5 bg-white/5 border border-white/10" style={{
+                    backgroundColor: unlocked ? 'hsl(var(--primary) / 0.15)' : 'rgba(255, 255, 255, 0.03)',
+                    border: `1px solid ${unlocked ? 'hsl(var(--primary) / 0.4)' : 'rgba(255, 255, 255, 0.08)'}`,
                     opacity: unlocked ? 1 : 0.55,
                   }}>
                     <div className="flex items-center gap-2 mb-1">
@@ -1677,7 +1758,7 @@ export default function MeteorSplitGame() {
               })}
             </div>
 
-            <button className="w-full font-display text-sm px-6 py-3 rounded-lg" style={btnPrimary}
+            <button className="apple-spring w-full font-display text-sm font-semibold px-6 py-3.5 rounded-xl" style={btnPrimary}
               onClick={() => setScreen('title')}>BACK</button>
           </div>
         </div>
@@ -1687,18 +1768,14 @@ export default function MeteorSplitGame() {
       {achievementToasts.length > 0 && (
         <div className="absolute top-20 right-4 z-30 flex flex-col gap-2 pointer-events-none">
           {achievementToasts.map(a => (
-            <div key={a.id} className="rounded-lg px-4 py-3 flex items-center gap-3 animate-in slide-in-from-right" style={{
-              backgroundColor: 'hsl(var(--card) / 0.95)',
-              border: '1px solid hsl(var(--primary))',
-              backdropFilter: 'blur(20px)',
-              boxShadow: '0 4px 20px hsl(var(--primary) / 0.4)',
-              minWidth: 220,
+            <div key={a.id} className="rounded-2xl px-4 py-3 flex items-center gap-3 apple-glass animate-in slide-in-from-right" style={{
+              minWidth: 240,
             }}>
               <div className="text-2xl">{a.icon}</div>
               <div>
-                <div className="font-display text-[10px] uppercase tracking-widest" style={{ color: 'hsl(var(--score-gold))' }}>Achievement</div>
-                <div className="font-display text-sm font-bold" style={{ color: 'hsl(var(--foreground))' }}>{a.title}</div>
-                <div className="font-body text-[10px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{a.description}</div>
+                <div className="font-display text-[10px] font-bold uppercase tracking-widest" style={{ color: 'hsl(var(--score-gold))' }}>Achievement Unlocked</div>
+                <div className="font-display text-sm font-black" style={{ color: 'hsl(var(--foreground))' }}>{a.title}</div>
+                <div className="font-body text-[11px]" style={{ color: 'hsl(var(--muted-foreground))' }}>{a.description}</div>
               </div>
             </div>
           ))}

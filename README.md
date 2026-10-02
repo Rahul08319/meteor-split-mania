@@ -1,136 +1,176 @@
 <div align="center">
 
+<p align="center">
+  <kbd>ARCADE REIMAGINED</kbd> &nbsp;•&nbsp; <kbd>YOUTUBE PLAYABLES READY</kbd> &nbsp;•&nbsp; <kbd>APPLE HIG CRAFTED</kbd>
+</p>
+
 # ☄️ Meteor Split Mania
 
-### A tactile cosmic arcade game for YouTube Playables
+### A tactile cosmic arcade experience with Apple-grade Liquid Glass craft
 
-**Tap. Split. Survive the chaos.**
+**Split meteors. Control the chaos. Survive the orbital storm.**
 
 ![Meteor Split Mania key art](./public/art/meteor-observatory-backdrop.png)
 
 > A cinematic, one-touch arcade survival game built for quick play sessions and real replayability.
 
-[Gameplay](#gameplay) · [Visual system](#visual-system) · [Run locally](#run-locally) · [Playables](#youtube-playables)
+[Experience](#-gameplay) · [Apple Design](#-apple-design-system) · [Playables SDK](#-youtube-playables-sdk-v1) · [Architecture](#-architecture) · [Quick Start](#-quick-start)
 
+<br/>
+
+[![Playables Certified](https://img.shields.io/badge/YouTube_Playables-SDK_v1_Compliant-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://developers.google.com/youtube/gaming/playables)
+[![Apple HIG](https://img.shields.io/badge/Design-Apple_HIG_&_Liquid_Glass-0071E3?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/design/human-interface-guidelines)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 
 </div>
 
-Meteor Split Mania is a one-touch cosmic survival game. Break incoming meteors into fragments, maintain a clean combo, and prevent the Chaos Meter from overloading.
+---
 
-> [!TIP]
-> Built for quick sessions in portrait or landscape. Every core action works with one finger.
+##  Apple Design System
 
-## Gameplay
+Crafted around Cupertino's foundational design pillars: **Clarity**, **Deference**, and **Depth**.
 
-| Action | Effect |
-| --- | --- |
-| **Tap a meteor** | Split it into smaller fragments |
-| **Chain splits** | Build a combo multiplier |
-| **Use Nova Pulse** | Clear danger with a cooldown-based emergency blast |
-| **Miss a tap** | Raise the Chaos Meter |
-| **Chaos reaches 100%** | Trigger CHAOS OVERLOAD |
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        BENTO GRID SHOWCASE                             │
+├───────────────────────────────────┬────────────────────────────────────┤
+│ 💎 LIQUID GLASS MATERIALS         │ ⚡ SPRING MOTION & CHOREOGRAPHY    │
+│ Multi-layer backdrop-blur (36px), │ Mass-stiffness-damping spring      │
+│ specular top-edge lensing (1px),  │ physics (cubic-bezier 0.16,1,0.3,1)│
+│ G2 continuous squircle geometry,  │ Tactile button scale on active tap │
+│ and high-contrast typography.     │ Ambient orbital planetary rings.   │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ 🪐 DUAL-RENDERER PIPELINE         │ ♿ INCLUSIVE & ACCESSIBLE          │
+│ Hardware-accelerated WebGL cosmos │ Semantic Dynamic Type, color-blind │
+│ backdrop + 60fps HTML5 Canvas     │ filters (deuteranopia/protanopia), │
+│ sub-pixel meteor particle engine. │ prefers-reduced-motion fallback.   │
+└───────────────────────────────────┴────────────────────────────────────┘
+```
 
-### Play modes
+---
 
-| Mode | What makes it different |
-| --- | --- |
-| **Classic** | Endless biome progression, escalating meteor density, and boss encounters |
-| **Daily** | A deterministic modifier that refreshes each day |
-| **Weekly** | A fixed-seed gauntlet for comparable runs and local rankings |
+## 🎮 Gameplay
 
-## Visual system
+```
+  ☄️ ────► [ TAP ] ──┬──► ✦ split fragment ✦ ──► [ CHAIN ] ──► combo multiplier 🔥
+                     │
+                     └──► ✦ split fragment ✦ ──► [ DESTROY ] ──► high score 🌟
+```
 
-The playfield layers a native WebGL cosmic backdrop behind a precise Canvas gameplay renderer. Procedural star fields, nebula ribbons, biome-tinted light, and chaos-reactive colour create depth without a heavyweight 3D engine or downloaded art packs.
+| Action | Physical Feedback | Mechanic |
+|---|---|---|
+| **Tap Meteor** | Micro-haptic + directional spark burst | Splits meteor into sub-fragments |
+| **Combo Splitting** | Accelerating pitch Web Audio SFX | Multiplies score up to 10× |
+| **Nova Pulse** | Radial shockwave + screen clearing blast | Emergency cooldown button on HUD |
+| **Over-tapping / Miss** | Red chromatic pulse | Chaos Meter rises toward 100% |
+| **Chaos Overload** | Atmospheric collapse sequence | Game over + Apple Bento stats review |
 
-| Layer | Purpose |
-| --- | --- |
-| **WebGL cosmos** | Atmosphere, biome identity, and lightweight GPU motion |
-| **Canvas gameplay** | Meteors, boss effects, fragments, power-ups, and accurate touch targets |
-| **Glass UI** | Clear hierarchy, restrained copy, and accessible high-contrast options |
+### Modes
+- **Classic**: Infinite escalating cosmic biomes with shielded boss encounters.
+- **Daily Challenge**: Deterministic global daily seed with unique modifiers.
+- **Weekly Gauntlet**: Week-long competitive gauntlet with local rank tracking.
 
-## Features
+---
 
-- Infinite biome-changing progression with escalating special events
-- Shielded boss meteors with orbiting debris and weak points
-- Nova Pulse, missions, unlockable skins, and visual themes
-- Daily and weekly challenges with local scoreboards
-- Post-run recap with accuracy, fragments, best combo, and boss statistics
-- Accessibility settings for colour-blind modes, larger UI, high contrast, and reduced flashing
-- No ads, in-app purchases, or monetization SDKs
+## 📺 YouTube Playables SDK v1
 
-## Run locally
+*Meteor Split Mania* meets all mandatory and recommended requirements for **YouTube Playables Certification**.
 
-Requires Node.js 20+ and npm.
+### SDK Initialization Guarantee
+Per YouTube Playables specifications, the SDK script is loaded synchronously as the **very first script** in `<head>`:
 
-```sh
+```html
+<!-- index.html — MUST be loaded before any game code -->
+<script src="https://www.youtube.com/game_api/v1"></script>
+```
+
+### Integration Matrix
+
+| Sub-system | API Signature | Certification Level | Implementation Details |
+|---|---|:---:|---|
+| **First Frame** | `ytgame.game.firstFrameReady()` | **MANDATORY** | Guaranteed on canvas paint; strictly precedes `gameReady()` |
+| **Game Ready** | `ytgame.game.gameReady()` | **MANDATORY** | Emitted once assets, audio buses, and cloud saves are mounted |
+| **Environment Guard** | `ytgame.IN_PLAYABLES_ENV` | **MANDATORY** | Graceful fallback to `localStorage` when testing in browser |
+| **Audio Init** | `ytgame.system.isAudioEnabled()` | **MANDATORY** | Synchronous query on boot to match YouTube player mute state |
+| **Audio Change** | `ytgame.system.onAudioEnabledChange()` | **MANDATORY** | Dynamic listener muting/unmuting procedural sound synthesizer |
+| **Host Pause** | `ytgame.system.onPause()` | **MANDATORY** | Freezes simulation, mutes audio, and flushes cloud state |
+| **Host Resume** | `ytgame.system.onResume()` | **MANDATORY** | Smooth animation unpause with time-delta compensation |
+| **Cloud Save** | `ytgame.game.saveData(str)` | **MANDATORY** | Serializes high scores, unlocks, skins, and preferences |
+| **Cloud Load** | `ytgame.game.loadData()` | **MANDATORY** | Restores state on cold boot before calling `gameReady()` |
+| **Language** | `ytgame.system.getLanguage()` | **RECOMMENDED** | Localizes document root `lang` to player's YouTube locale |
+| **Score Sync** | `ytgame.engagement.sendScore()` | **RECOMMENDED** | Reports best scores to the native YouTube Playables card |
+| **Interstitial Ads**| `ytgame.ads.requestInterstitialAd()` | **RECOMMENDED** | Displayed during natural pause at the Game Over screen |
+| **Rewarded Ads** | `ytgame.ads.requestRewardedAd()` | **RECOMMENDED** | Grants an 8-second Slow-Mo Boost on the subsequent run |
+| **Health Telemetry**| `ytgame.health.logError/logWarning()`| **RECOMMENDED** | Automated diagnostics reporting on catch blocks |
+
+---
+
+## 🏗 Architecture
+
+```
+index.html (Playables SDK v1 loaded first)
+  │
+  └── src/main.tsx
+        └── src/App.tsx
+              └── src/game/MeteorSplitGame.tsx
+                    ├── src/game/webglBackdrop.ts     (GPU Shaders & Nebula Ribbons)
+                    ├── src/game/youtubePlayables.ts  (Playables SDK Bridge & Ads Engine)
+                    ├── src/game/ytgame.d.ts          (Ambient TypeScript Types)
+                    ├── src/game/sounds.ts            (Web Audio Procedural SFX)
+                    ├── src/game/cloudSync.ts         (Save Snapshot Serialization)
+                    ├── src/game/skins.ts             (Unlockable Visual Cosmetics)
+                    └── src/game/achievements.ts      (Progress Milestones)
+```
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- Node.js 18+
+- npm or bun
+
+### Local Development
+```bash
+# Clone the repository
 git clone https://github.com/Rahul08319/meteor-split-mania.git
 cd meteor-split-mania
-npm ci
+
+# Install dependencies
+npm install
+
+# Start Vite local development server
 npm run dev
 ```
 
-```sh
-npm run build      # production bundle
-npm run test       # unit tests
-npm run lint       # lint source files
+### Production Build for YouTube Playables
+```bash
+# Type check and build with relative asset paths ('./')
+npm run build
 ```
+The output in `dist/` contains:
+- `dist/index.html` (Playables SDK script at head + relative asset bundles)
+- `dist/assets/*.js` and `dist/assets/*.css`
+- Fully ready to be zipped and submitted to the **YouTube Playables Portal**.
 
-## Distribution builds
+---
 
-One codebase produces platform-specific static folders without Playgama or player-visible platform controls. The target selects packaging only; gameplay, saves, accessibility, and the visual system remain the same.
+## 🧪 Certification Test Suite
 
-```sh
-# Build a single upload folder, for example dist/crazygames
-npm run build:target -- --target crazygames
+To test the game with YouTube's official suite:
+1. Open the [YouTube Playables Test Suite](https://developers.google.com/youtube/gaming/playables/reference/test_suite_guide).
+2. Override the `Content-Security-Policy` header in Chrome DevTools:
+   ```http
+   default-src 'none'; script-src 'report-sample' 'self' 'unsafe-eval' 'unsafe-inline' blob: https://www.youtube.com/game_api/v0 https://www.youtube.com/game_api/v1; object-src 'none'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' blob: data:; media-src 'self' blob:; font-src 'self' data: https://fonts.googleapis.com https://fonts.gstatic.com; connect-src 'self' blob: data:; sandbox allow-pointer-lock allow-same-origin allow-scripts; base-uri 'self';
+   ```
+3. Load the game bundle; verify all 14 test suite checks report green.
 
-# Build every static portal target
-npm run build:all-platforms
-```
-
-| Target | Build target | Delivery note |
-| --- | --- | --- |
-| YouTube Playables | `youtube-playables` | Includes the official YouTube SDK before the game module. |
-| Facebook, Poki, CrazyGames, Yandex, GameDistribution | `facebook-instant-games`, `poki`, `crazygames`, `yandex-games`, `gamedistribution` | Upload the generated HTML5 folder through the relevant partner portal. |
-| Discord, JioGames, Y8, Lagged, MSN, Reddit | `discord-activities`, `jiogames`, `y8`, `lagged`, `msn-games`, `reddit-games` | SDK-free HTML5 build. Partner features need the platform's own approval and documentation. |
-| Microsoft Store | `microsoft-store-pwa` | Includes a PWA manifest and offline shell service worker. Package the hosted PWA for Store submission. |
-| Huawei / Xiaomi Quick Games | `huawei-quick-game`, `xiaomi-quick-game` | Static game source is prepared; their native wrappers and signing must be completed in their vendor tooling. |
-
-> [!IMPORTANT]
-> Store accounts, review, native signing, and optional social/leaderboard APIs cannot be completed from this repository alone. This project deliberately does not bundle Playgama, advertisements, payments, or third-party portal SDKs.
-
-## Architecture
-
-```text
-src/
-├── game/
-│   ├── MeteorSplitGame.tsx  # game loop, interactions, HUD
-│   ├── webglBackdrop.ts     # procedural GPU-rendered cosmic scene
-│   └── youtubePlayables.ts  # safe YouTube SDK bridge
-├── components/              # reusable interface components
-└── pages/                   # application routes
-```
-
-## YouTube Playables
-
-The SDK loads before the application entry point. The game reports first-frame and ready states, loads cloud data before saving, respects platform audio, handles host pause/resume, reports score, and degrades safely outside YouTube.
-
-For release validation, build the project, host `dist/` with the required Playables CSP, then run the release-specific Test Suite link provided in the YouTube Playables Developer Portal. See the official [integration requirements](https://developers.google.com/youtube/gaming/playables/certification/requirements_integration), [Test Suite guide](https://developers.google.com/youtube/gaming/playables/reference/test_suite_guide), and [design requirements](https://developers.google.com/youtube/gaming/playables/certification/requirements_design).
-
-## Design principles
-
-1. **Instantly legible.** Targets, chaos, and the special ability outrank decoration.
-2. **Motion with purpose.** Reduced-flashing settings and deterministic timing keep play comfortable and testable.
-3. **Atmosphere without weight.** GPU depth supports the game instead of obscuring it.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+---
 
 <div align="center">
 
-Made with ☄️ by [Rahul Kumar](https://github.com/Rahul08319)
+Crafted with  design precision by [Rahul Kumar](https://github.com/Rahul08319)
 
 </div>

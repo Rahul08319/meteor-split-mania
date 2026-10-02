@@ -133,6 +133,21 @@ declare namespace ytgame {
      */
     function logWarning(): void;
   }
+
+  namespace ads {
+    /**
+     * Requests an interstitial ad to be shown.
+     * Makes no guarantees about whether the ad was shown.
+     */
+    function requestInterstitialAd(): Promise<void>;
+
+    /**
+     * Requests a rewarded ad to be shown for a particular reward type.
+     * @param rewardId String identifier for the reward.
+     * @returns Promise resolving to whether the player earned the reward.
+     */
+    function requestRewardedAd(rewardId: string): Promise<boolean>;
+  }
 }
 
 interface Window {
