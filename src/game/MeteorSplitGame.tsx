@@ -1263,14 +1263,6 @@ export default function MeteorSplitGame() {
           </div>
         </div>
       )}
-                width: `${uiState.chaos * 100}%`,
-                background: uiState.chaos > CHAOS_THRESHOLD ? 'linear-gradient(90deg, #FF9500, #FF3B30)' : 'linear-gradient(90deg, #5AC8FA, #FF9500)',
-                boxShadow: uiState.chaos > CHAOS_THRESHOLD ? '0 0 12px rgba(255, 59, 48, 0.8)' : 'none',
-              }} />
-            </div>
-          </div>
-        </div>
-      )}
 
       {screen === 'playing' && (
         <>
@@ -1287,9 +1279,6 @@ export default function MeteorSplitGame() {
             color: '#FFFFFF',
             border: `2px solid ${uiState.pulseCooldown <= 0 ? 'rgba(180, 235, 255, 0.9)' : 'rgba(255, 255, 255, 0.14)'}`,
             boxShadow: uiState.pulseCooldown <= 0 ? '0 0 24px rgba(0, 160, 255, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.4)' : 'none',
-          }} onClick={(event) => { event.stopPropagation(); activatePulse(); }}>
-            {uiState.pulseCooldown <= 0 ? 'NOVA\nPULSE' : `${Math.ceil(uiState.pulseCooldown / 1000)}s`}
-          </button>
           }} onClick={(event) => { event.stopPropagation(); activatePulse(); }}>
             {uiState.pulseCooldown <= 0 ? 'NOVA\nPULSE' : `${Math.ceil(uiState.pulseCooldown / 1000)}s`}
           </button>
