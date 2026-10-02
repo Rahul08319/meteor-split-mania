@@ -21,4 +21,4 @@ export const DISTRIBUTION_TARGETS: Record<DistributionTarget, { label: string; p
 const isTarget = (value: string): value is DistributionTarget => value in DISTRIBUTION_TARGETS;
 const configuredTarget = import.meta.env.VITE_DISTRIBUTION_TARGET || new URLSearchParams(window.location.search).get('platform') || 'web';
 export const distributionTarget: DistributionTarget = isTarget(configuredTarget) ? configuredTarget : 'web';
-export const shouldRegisterServiceWorker = distributionTarget === 'web' || distributionTarget === 'microsoft-store-pwa';
+export const shouldRegisterServiceWorker = distributionTarget === 'microsoft-store-pwa';

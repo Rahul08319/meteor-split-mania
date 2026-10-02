@@ -1,17 +1,19 @@
-const CACHE = 'meteor-split-shell-v1';
-const SHELL = ['/', '/index.html', '/manifest.webmanifest'];
+// Self-healing Service Worker: Clears legacy stale caches and unregisters.
+const CACHE_NAME = 'meteor-split-shell-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))));
-  self.clients.claim();
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(() => self.registration.unregister())
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET' || new URL(event.request.url).origin !== self.location.origin) return;
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request)));
+  // Always fetch directly from network to prevent caching stale shells
+  event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
 });
