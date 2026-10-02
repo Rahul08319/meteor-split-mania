@@ -16,7 +16,7 @@ import CloudSyncPanel from '@/components/CloudSyncPanel';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { CalendarDays, CircleHelp, Palette, Settings2, Trophy } from 'lucide-react';
-import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, logYTError, showInterstitialAd, showRewardedAd, REWARD_IDS, inPlayablesEnv } from './youtubePlayables';
+import { initializeYouTubePlayables, loadYouTubeProgress, notifyFirstFrameReady, notifyGameReady, saveYouTubeProgress, sendYouTubeScore, logYTError, showInterstitialAd, showRewardedAd, REWARD_IDS, inPlayablesEnv, notifyGameplayStart, notifyGameplayStop } from './youtubePlayables';
 import { createRunMissions, RunMission, updateRunMissions } from './missions';
 import { addWeeklyEntry, getWeeklyAttempts, getWeeklyBestScore, getWeeklyLeaderboard, getWeeklyModifiers, getWeekKey } from './weekly';
 import { createWebGLBackdrop, WebGLBackdrop } from './webglBackdrop';
@@ -486,6 +486,7 @@ export default function MeteorSplitGame() {
       refreshUnlocks();
       addParticles(viewportRef.current.width / 2, viewportRef.current.height / 2, 50, 0, 'chaos');
       void saveYouTubeProgress();
+      notifyGameplayStop();
       void showInterstitialAd();
       setScreen('gameover');
     }
@@ -584,6 +585,7 @@ export default function MeteorSplitGame() {
     missionsRef.current = createRunMissions();
     setMissions(missionsRef.current);
     startBGM();
+    notifyGameplayStart();
     setScreen('playing');
   }, [difficulty, selectedSkinId, selectedThemeId]);
 
@@ -1413,26 +1415,26 @@ export default function MeteorSplitGame() {
 
             {/* Bento Grid */}
             <div className="grid grid-cols-2 gap-2.5 my-4 text-left">
-              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+              <div className="apple-bento-tile p-3.5">
                 <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Tap Accuracy</div>
                 <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.taps ? Math.round((gameRef.current.hits / gameRef.current.taps) * 100) : 0}%</div>
               </div>
-              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+              <div className="apple-bento-tile p-3.5">
                 <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Fragments Split</div>
                 <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.meteorsDestroyed}</div>
               </div>
-              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+              <div className="apple-bento-tile p-3.5">
                 <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Max Combo</div>
                 <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.maxCombo}x</div>
               </div>
-              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 backdrop-blur-md">
+              <div className="apple-bento-tile p-3.5">
                 <div className="font-body text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Bosses Defeated</div>
                 <div className="font-display text-lg font-black text-white mt-0.5">{gameRef.current.bossDefeated}</div>
               </div>
             </div>
 
             {missions.length > 0 && (
-              <div className="rounded-2xl p-3.5 bg-white/5 border border-white/10 text-left my-3 space-y-1.5">
+              <div className="apple-bento-tile p-3.5 text-left my-3 space-y-1.5">
                 <div className="font-body text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Run Missions</div>
                 {missions.map(mission => (
                   <div key={mission.id} className="font-body text-xs flex justify-between items-center" style={{ color: mission.complete ? 'hsl(var(--score-gold))' : 'hsl(var(--muted-foreground))' }}>

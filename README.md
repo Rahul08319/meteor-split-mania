@@ -1,40 +1,43 @@
 <div align="center">
 
 <p align="center">
-  <kbd>ARCADE REIMAGINED</kbd> &nbsp;•&nbsp; <kbd>YOUTUBE PLAYABLES READY</kbd> &nbsp;•&nbsp; <kbd>APPLE HIG CRAFTED</kbd>
+  <kbd> APPLE HIG CRAFTED</kbd> &nbsp;•&nbsp; <kbd>MULTI-PLATFORM READY</kbd> &nbsp;•&nbsp; <kbd>ZERO THIRD-PARTY WRAPPERS</kbd>
 </p>
 
 # ☄️ Meteor Split Mania
 
-### A tactile cosmic arcade experience with Apple-grade Liquid Glass craft
+### A tactile cosmic arcade experience designed with Cupertino Liquid Glass craft
 
 **Split meteors. Control the chaos. Survive the orbital storm.**
 
 ![Meteor Split Mania key art](./public/art/meteor-observatory-backdrop.png)
 
-> A cinematic, one-touch arcade survival game built for quick play sessions and real replayability.
+> A cinematic, one-touch arcade survival game with fluid physics, WebGL celestial shaders, and native SDK adapters for 15+ global gaming ecosystems.
 
-[Experience](#-gameplay) · [Apple Design](#-apple-design-system) · [Playables SDK](#-youtube-playables-sdk-v1) · [Architecture](#-architecture) · [Quick Start](#-quick-start)
+[Experience](#-gameplay) · [Apple Design](#-apple-design-system) · [All Platforms](#-multi-platform-matrix) · [Architecture](#-architecture) · [Build Targets](#-build-for-all-platforms)
 
 <br/>
 
-[![Playables Certified](https://img.shields.io/badge/YouTube_Playables-SDK_v1_Compliant-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://developers.google.com/youtube/gaming/playables)
-[![Apple HIG](https://img.shields.io/badge/Design-Apple_HIG_&_Liquid_Glass-0071E3?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/design/human-interface-guidelines)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
-[![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![YouTube Playables](https://img.shields.io/badge/YouTube_Playables-SDK_v1-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://developers.google.com/youtube/gaming/playables)
+[![Facebook Instant](https://img.shields.io/badge/Facebook_Instant-FBInstant_v7.1-0084FF?style=for-the-badge&logo=facebook&logoColor=white)](https://developers.facebook.com/docs/games/instant-games)
+[![Poki](https://img.shields.io/badge/Poki-PokiSDK_v2-00D26A?style=for-the-badge&logo=googleplay&logoColor=white)](https://developers.poki.com/)
+[![CrazyGames](https://img.shields.io/badge/CrazyGames-SDK_v3-9E47FF?style=for-the-badge&logo=gamepad&logoColor=white)](https://developer.crazygames.com/)
+[![Yandex Games](https://img.shields.io/badge/Yandex_Games-YaGames_v2-FC3F1D?style=for-the-badge&logo=yandex&logoColor=white)](https://yandex.com/dev/games/)
+[![Discord Activities](https://img.shields.io/badge/Discord-Activities_SDK-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.com/build/embedded-app-sdk)
+[![Microsoft Store](https://img.shields.io/badge/Microsoft_Store-PWA-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://developer.microsoft.com/)
+[![Apple HIG](https://img.shields.io/badge/Design-Apple_Liquid_Glass-0071E3?style=for-the-badge&logo=apple&logoColor=white)](https://developer.apple.com/design/human-interface-guidelines)
 
 </div>
 
 ---
 
-##  Apple Design System
+##  Apple Design System & Liquid Glass Aesthetics
 
-Crafted around Cupertino's foundational design pillars: **Clarity**, **Deference**, and **Depth**.
+Crafted according to Apple's Human Interface Guidelines (HIG): **Clarity**, **Deference**, and **Depth**.
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        BENTO GRID SHOWCASE                             │
+│                        APPLE BENTO GRID SHOWCASE                       │
 ├───────────────────────────────────┬────────────────────────────────────┤
 │ 💎 LIQUID GLASS MATERIALS         │ ⚡ SPRING MOTION & CHOREOGRAPHY    │
 │ Multi-layer backdrop-blur (36px), │ Mass-stiffness-damping spring      │
@@ -48,6 +51,34 @@ Crafted around Cupertino's foundational design pillars: **Clarity**, **Deference
 │ sub-pixel meteor particle engine. │ prefers-reduced-motion fallback.   │
 └───────────────────────────────────┴────────────────────────────────────┘
 ```
+
+- **SF Pro Typography Hierarchy**: System San Francisco Pro Display typography with tight title tracking, wide uppercase kickers (`0.18em`), and dynamic text scaling.
+- **Continuous Squircles (G2 Continuity)**: All panels, bento tiles, and interactive elements use Apple's superellipse corner smoothing.
+- **Cupertino Segmented Controls**: Sliding pill selectors for difficulty options (`Easy`, `Normal`, `Hard`, `Chaos`) and leaderboard filters.
+- **Physical Spring Feedback**: Micro-depress (`scale(0.96)`) on pointerdown, subtle hover lift (`translateY(-2px)`), and gentle ambient floating keyframes.
+
+---
+
+## 🌐 Multi-Platform Matrix (100% Native, Zero Playgama)
+
+Every platform uses direct, native SDK bindings implemented in [`src/game/platformBridge.ts`](./src/game/platformBridge.ts). There is **no Playgama SDK or intermediary third-party wrapper**—ensuring absolute minimum bundle size, direct API certification compliance, and instantaneous boot times.
+
+| Platform | Native Bridge / SDK | Lifecycle Support | Monetization (Ads) | Data Persistence |
+|---|---|---|---|---|
+| **YouTube Playables** | `window.ytgame` v1 | `firstFrameReady()`, `gameReady()` | Interstitial + Rewarded (`SLOW_MO_BOOST`) | `ytgame.game.saveData/loadData` |
+| **Facebook Instant Games** | `window.FBInstant` v7.1 | `initializeAsync()`, `startGameAsync()` | `getInterstitialAdAsync`, `getRewardedVideoAsync` | `FBInstant.player.setDataAsync` |
+| **Poki** | `window.PokiSDK` v2 | `gameLoadingFinished()`, `gameplayStart/Stop` | `commercialBreak()`, `rewardedBreak()` | Unified `localStorage` cache |
+| **CrazyGames** | `window.CrazyGames.SDK` v3 | `loadingStop()`, `gameplayStart/Stop` | `requestAd('midgame')`, `requestAd('rewarded')` | `CrazyGames.SDK.data.save/load` |
+| **Yandex Games** | `window.YaGames` v2 | `LoadingAPI.ready()`, auto-init | `showFullscreenAdv()`, `showRewardedVideo()` | `player.setData/getData` |
+| **GameDistribution** | `window.gdsdk` | `preloadAd()`, game resume hooks | `showAd('interstitial')`, `showAd('rewarded')` | Local save snapshots |
+| **Discord Activities** | Discord Embedded App RPC | `ready()`, focus/blur events | N/A (Activity sandbox) | Discord Storage API / Cloud |
+| **JioGames** | `window.JioGames` / JioSDK | Boot handshake, lifecycle | `showAd()`, `showRewardAd()` | `postScore()` leaderboard |
+| **Y8** | `window.ID` (Id.net SDK) | `GamePlay.start()`, `GamePlay.stop()` | `ID.ads.display()`, `ID.ads.reward()` | Id.net user profile save |
+| **Lagged** | `window.LaggedAPI` | `LaggedAPI.init()` | `showAd('interstitial')`, `showAd('rewarded')` | `LaggedAPI.Scores.save()` |
+| **Microsoft Store (PWA)** | PWA Manifest & Service Worker | Title bar overlay, window controls | Windows Store Ad SDK (optional) | IndexedDB & Cache Storage |
+| **Huawei & Xiaomi Quick Games** | Quick Game `qg` runtime | `qg` native app lifecycle | `createInterstitialAd()`, `createRewardedVideoAd()` | `qg.setStorage()`, `qg.getStorage()` |
+| **MSN & Reddit Games** | PostMessage Frame Bridge | `GAME_READY`, `PAUSE`, `RESUME` | Container message events | PostMessage telemetry |
+| **Universal Web** | Native HTML5 / Web Audio | Audio unlock on gesture, visibility change | Degrades gracefully to no-op | Robust `localStorage` snapshots |
 
 ---
 
@@ -67,56 +98,24 @@ Crafted around Cupertino's foundational design pillars: **Clarity**, **Deference
 | **Over-tapping / Miss** | Red chromatic pulse | Chaos Meter rises toward 100% |
 | **Chaos Overload** | Atmospheric collapse sequence | Game over + Apple Bento stats review |
 
-### Modes
+### Game Modes
 - **Classic**: Infinite escalating cosmic biomes with shielded boss encounters.
 - **Daily Challenge**: Deterministic global daily seed with unique modifiers.
 - **Weekly Gauntlet**: Week-long competitive gauntlet with local rank tracking.
 
 ---
 
-## 📺 YouTube Playables SDK v1
-
-*Meteor Split Mania* meets all mandatory and recommended requirements for **YouTube Playables Certification**.
-
-### SDK Initialization Guarantee
-Per YouTube Playables specifications, the SDK script is loaded synchronously as the **very first script** in `<head>`:
-
-```html
-<!-- index.html — MUST be loaded before any game code -->
-<script src="https://www.youtube.com/game_api/v1"></script>
-```
-
-### Integration Matrix
-
-| Sub-system | API Signature | Certification Level | Implementation Details |
-|---|---|:---:|---|
-| **First Frame** | `ytgame.game.firstFrameReady()` | **MANDATORY** | Guaranteed on canvas paint; strictly precedes `gameReady()` |
-| **Game Ready** | `ytgame.game.gameReady()` | **MANDATORY** | Emitted once assets, audio buses, and cloud saves are mounted |
-| **Environment Guard** | `ytgame.IN_PLAYABLES_ENV` | **MANDATORY** | Graceful fallback to `localStorage` when testing in browser |
-| **Audio Init** | `ytgame.system.isAudioEnabled()` | **MANDATORY** | Synchronous query on boot to match YouTube player mute state |
-| **Audio Change** | `ytgame.system.onAudioEnabledChange()` | **MANDATORY** | Dynamic listener muting/unmuting procedural sound synthesizer |
-| **Host Pause** | `ytgame.system.onPause()` | **MANDATORY** | Freezes simulation, mutes audio, and flushes cloud state |
-| **Host Resume** | `ytgame.system.onResume()` | **MANDATORY** | Smooth animation unpause with time-delta compensation |
-| **Cloud Save** | `ytgame.game.saveData(str)` | **MANDATORY** | Serializes high scores, unlocks, skins, and preferences |
-| **Cloud Load** | `ytgame.game.loadData()` | **MANDATORY** | Restores state on cold boot before calling `gameReady()` |
-| **Language** | `ytgame.system.getLanguage()` | **RECOMMENDED** | Localizes document root `lang` to player's YouTube locale |
-| **Score Sync** | `ytgame.engagement.sendScore()` | **RECOMMENDED** | Reports best scores to the native YouTube Playables card |
-| **Interstitial Ads**| `ytgame.ads.requestInterstitialAd()` | **RECOMMENDED** | Displayed during natural pause at the Game Over screen |
-| **Rewarded Ads** | `ytgame.ads.requestRewardedAd()` | **RECOMMENDED** | Grants an 8-second Slow-Mo Boost on the subsequent run |
-| **Health Telemetry**| `ytgame.health.logError/logWarning()`| **RECOMMENDED** | Automated diagnostics reporting on catch blocks |
-
----
-
 ## 🏗 Architecture
 
 ```
-index.html (Playables SDK v1 loaded first)
+index.html (Platform SDK injected dynamically at build time)
   │
   └── src/main.tsx
         └── src/App.tsx
               └── src/game/MeteorSplitGame.tsx
+                    ├── src/game/platformBridge.ts    (Zero-Dependency Native Multi-Platform Bridge)
                     ├── src/game/webglBackdrop.ts     (GPU Shaders & Nebula Ribbons)
-                    ├── src/game/youtubePlayables.ts  (Playables SDK Bridge & Ads Engine)
+                    ├── src/game/youtubePlayables.ts  (YouTube Playables Spec Wrapper)
                     ├── src/game/ytgame.d.ts          (Ambient TypeScript Types)
                     ├── src/game/sounds.ts            (Web Audio Procedural SFX)
                     ├── src/game/cloudSync.ts         (Save Snapshot Serialization)
@@ -126,34 +125,32 @@ index.html (Playables SDK v1 loaded first)
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Build for All Platforms
 
-### Prerequisites
-- Node.js 18+
-- npm or bun
-
-### Local Development
+### 1. Build Universal Web / YouTube Playables (Default)
 ```bash
-# Clone the repository
-git clone https://github.com/Rahul08319/meteor-split-mania.git
-cd meteor-split-mania
-
-# Install dependencies
-npm install
-
-# Start Vite local development server
-npm run dev
-```
-
-### Production Build for YouTube Playables
-```bash
-# Type check and build with relative asset paths ('./')
 npm run build
 ```
-The output in `dist/` contains:
-- `dist/index.html` (Playables SDK script at head + relative asset bundles)
-- `dist/assets/*.js` and `dist/assets/*.css`
-- Fully ready to be zipped and submitted to the **YouTube Playables Portal**.
+Generates production-optimized bundle in `dist/` with relative asset links (`./`).
+
+### 2. Build for a Specific Platform
+```bash
+# Example: Build specifically for Poki
+npm run build:target -- --target poki
+
+# Example: Build specifically for CrazyGames
+npm run build:target -- --target crazygames
+
+# Example: Build specifically for Facebook Instant Games
+npm run build:target -- --target facebook-instant-games
+```
+Outputs isolated target builds into `dist/<target-name>/`.
+
+### 3. Build All Platforms in One Command
+```bash
+npm run build:all-platforms
+```
+Builds and packages standalone production distributions for all 15 platforms in parallel into `dist/`.
 
 ---
 

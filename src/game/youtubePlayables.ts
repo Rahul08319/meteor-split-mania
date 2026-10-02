@@ -60,6 +60,30 @@ export const notifyGameReady = (): void => {
   }
 };
 
+/**
+ * Notifies host platforms that active gameplay has started (e.g. Poki, CrazyGames, Y8).
+ */
+export const notifyGameplayStart = (): void => {
+  try {
+    window.PokiSDK?.gameplayStart();
+    window.CrazyGames?.SDK.game.gameplayStart();
+    window.ID?.GamePlay.start();
+    window.parent?.postMessage({ type: 'GAMEPLAY_START' }, '*');
+  } catch { /* safe */ }
+};
+
+/**
+ * Notifies host platforms that gameplay has stopped (game over / menu).
+ */
+export const notifyGameplayStop = (): void => {
+  try {
+    window.PokiSDK?.gameplayStop();
+    window.CrazyGames?.SDK.game.gameplayStop();
+    window.ID?.GamePlay.stop();
+    window.parent?.postMessage({ type: 'GAMEPLAY_STOP' }, '*');
+  } catch { /* safe */ }
+};
+
 // ─── Cloud Save ───────────────────────────────────────────────────────────────
 
 /**
