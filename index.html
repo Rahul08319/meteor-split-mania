@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" style="background-color: #07112a; color: #ffffff;">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Meteor Split Mania</title>
     <meta name="description" content="Tap to split meteors before they overwhelm you! A fast-paced arcade game playable on YouTube." />
     <meta name="author" content="Rahul Kumar" />
@@ -18,8 +18,17 @@
     <!-- platform-sdk: injected at build time for YouTube builds only -->
   </head>
 
-  <body>
-    <div id="root"></div>
+  <body style="margin: 0; padding: 0; background-color: #07112a; color: #ffffff; min-height: 100vh; overflow: hidden; -webkit-tap-highlight-color: transparent; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;">
+    <div id="root">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: radial-gradient(circle at center, #11204d 0%, #07112a 70%, #030816 100%); color: #ffffff; text-align: center; padding: 24px;">
+        <div style="width: 44px; height: 44px; border: 3px solid rgba(255,255,255,0.12); border-top-color: #38bdf8; border-radius: 50%; animation: msSpin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite; margin-bottom: 16px;"></div>
+        <div style="font-size: 20px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px; background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">METEOR SPLIT MANIA</div>
+        <div style="font-size: 12px; color: rgba(255,255,255,0.6); letter-spacing: 0.05em;">INITIALIZING COSMIC ENGINE...</div>
+        <style>
+          @keyframes msSpin { to { transform: rotate(360deg); } }
+        </style>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { lovable } from '@/integrations/lovable/index';
 import { pushSave, pullSave } from '@/game/cloudSync';
 
@@ -20,6 +20,7 @@ export default function CloudSyncPanel({ onSynced, panelStyle, btnPrimary, btnSe
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
 
   useEffect(() => {
+    if (!isSupabaseConfigured) return;
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
       setUserEmail(session?.user?.email ?? null);
     });
@@ -60,7 +61,20 @@ export default function CloudSyncPanel({ onSynced, panelStyle, btnPrimary, btnSe
           Optional. Keep settings, unlocked skins, achievements and scores across devices.
         </p>
 
-        {!userEmail ? (
+        {!isSupabaseConfigured ? (
+          <div className="rounded-xl p-4 mb-4 apple-bento-tile space-y-3" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.12)' }}>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="font-display text-xs tracking-wider font-semibold text-emerald-300 uppercase">LOCAL &amp; PLATFORM STORAGE ACTIVE</span>
+            </div>
+            <p className="font-body text-xs leading-relaxed text-slate-300">
+              All your unlocked skins, themes, achievements, missions, and high scores are automatically preserved in local storage and synced with your host platform account.
+            </p>
+            <div className="text-[11px] font-mono text-slate-400 bg-black/30 rounded-lg p-2.5 border border-white/5">
+              Target: Universal Platform Bridge (YouTube, Poki, CrazyGames, Discord, PWA)
+            </div>
+          </div>
+        ) : !userEmail ? (
           <>
             <div className="flex gap-2 mb-4">
               {(['signin', 'signup'] as const).map(m => (

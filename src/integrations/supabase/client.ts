@@ -3,11 +3,21 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const rawUrl = import.meta.env.VITE_SUPABASE_URL;
+const rawKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
+export const isSupabaseConfigured = Boolean(
+  rawUrl &&
+  rawKey &&
+  rawUrl !== 'https://placeholder.supabase.co' &&
+  !rawUrl.includes('placeholder')
+);
 
-function isNewSupabaseApiKey(value: string): boolean {
+const SUPABASE_URL = rawUrl || 'https://placeholder.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = rawKey || 'placeholder-anon-key';
+
+function isNewSupabaseApiKey(value?: string): boolean {
+  if (!value || typeof value !== 'string') return false;
   return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
 }
 

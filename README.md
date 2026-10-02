@@ -134,19 +134,27 @@ npm run build
 Generates production-optimized bundle in `dist/` with relative asset links (`./`).
 
 ### 2. Build for a Specific Platform
+Use dedicated npm scripts or the multi-target CLI:
 ```bash
-# Example: Build specifically for Poki
-npm run build:target -- --target poki
-
-# Example: Build specifically for CrazyGames
-npm run build:target -- --target crazygames
-
-# Example: Build specifically for Facebook Instant Games
-npm run build:target -- --target facebook-instant-games
+npm run build:yt            # YouTube Playables
+npm run build:fb            # Facebook Instant Games
+npm run build:poki          # Poki SDK v2
+npm run build:crazygames    # CrazyGames SDK v3
+npm run build:discord       # Discord Activities
+npm run build:yandex        # Yandex Games
+npm run build:gamedistribution # GameDistribution
+npm run build:jiogames      # JioGames
+npm run build:y8            # Y8 / Id.net
+npm run build:lagged        # Lagged
+npm run build:pwa           # Microsoft Store / PWA
+npm run build:huawei        # Huawei Quick Game
+npm run build:xiaomi        # Xiaomi Quick Game
+npm run build:msn           # MSN Games
+npm run build:reddit        # Reddit Games
 ```
 Outputs isolated target builds into `dist/<target-name>/`.
 
-### 3. Build All Platforms in One Command
+### 3. Build All 15 Platforms in One Command
 ```bash
 npm run build:all-platforms
 ```

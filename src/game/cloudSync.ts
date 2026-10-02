@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, isSupabaseConfigured } from '@/integrations/supabase/client';
 import { getSettings, replaceSettings, AudioSettings } from './settings';
 
 const KEYS = {
@@ -65,6 +65,7 @@ export const applySnapshot = (snap: SaveSnapshot) => {
 };
 
 export const pushSave = async () => {
+  if (!isSupabaseConfigured) return;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not signed in');
   const snap = collectSnapshot();
@@ -79,6 +80,7 @@ export const pushSave = async () => {
 };
 
 export const pullSave = async (): Promise<boolean> => {
+  if (!isSupabaseConfigured) return false;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not signed in');
   const { data, error } = await supabase

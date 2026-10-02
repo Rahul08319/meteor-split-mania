@@ -21,7 +21,7 @@ export default defineConfig(({ mode }) => ({
       transformIndexHtml(html: string) {
         const target = process.env.VITE_DISTRIBUTION_TARGET || mode;
         const platformScripts: Record<string, string> = {
-          "youtube-playables": '<script src="https://www.youtube.com/game_api/v1"></script>',
+          "youtube-playables": '<script src="https://www.youtube.com/game_api/v1" onerror="console.warn(\'[Playables] SDK blocked or unavailable, standalone web mode active\')"></script>',
           "facebook-instant-games": '<script src="https://connect.facebook.net/en_US/fbinstant.7.1.js"></script>',
           "poki": '<script src="https://game-cdn.poki.com/scripts/v2/poki-sdk.js"></script>',
           "crazygames": '<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>',

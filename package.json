@@ -12,7 +12,22 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:target": "node scripts/build-targets.mjs",
-    "build:all-platforms": "node scripts/build-targets.mjs --all"
+    "build:all-platforms": "node scripts/build-targets.mjs --all",
+    "build:yt": "node scripts/build-targets.mjs --target youtube-playables",
+    "build:fb": "node scripts/build-targets.mjs --target facebook-instant-games",
+    "build:poki": "node scripts/build-targets.mjs --target poki",
+    "build:crazygames": "node scripts/build-targets.mjs --target crazygames",
+    "build:discord": "node scripts/build-targets.mjs --target discord-activities",
+    "build:yandex": "node scripts/build-targets.mjs --target yandex-games",
+    "build:gamedistribution": "node scripts/build-targets.mjs --target gamedistribution",
+    "build:jiogames": "node scripts/build-targets.mjs --target jiogames",
+    "build:y8": "node scripts/build-targets.mjs --target y8",
+    "build:lagged": "node scripts/build-targets.mjs --target lagged",
+    "build:pwa": "node scripts/build-targets.mjs --target microsoft-store-pwa",
+    "build:huawei": "node scripts/build-targets.mjs --target huawei-quick-game",
+    "build:xiaomi": "node scripts/build-targets.mjs --target xiaomi-quick-game",
+    "build:msn": "node scripts/build-targets.mjs --target msn-games",
+    "build:reddit": "node scripts/build-targets.mjs --target reddit-games"
   },
   "dependencies": {
     "@capacitor/android": "^8.2.0",
